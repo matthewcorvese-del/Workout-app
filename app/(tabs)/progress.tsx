@@ -92,7 +92,7 @@ export default function ProgressScreen() {
           </Text>
         </View>
         <View style={styles.sessionMetaItem}>
-          <Flame size={12} color={Colors.caloriesColor || Colors.warning} />
+          <Flame size={12} color={Colors.warning} />
           <Text style={styles.sessionMetaText}>
             {item.caloriesBurned || '—'} cal
           </Text>

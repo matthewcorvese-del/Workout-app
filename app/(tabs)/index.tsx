@@ -192,7 +192,7 @@ export default function WorkoutsScreen() {
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Dumbbell size={48} color={Colors.textMuted} />
+            <Zap size={48} color={Colors.textMuted} />
             <Text style={styles.emptyTitle}>No Routines Yet</Text>
             <Text style={styles.emptyText}>
               Create your first workout routine or start a quick workout
@@ -291,7 +291,7 @@ export default function WorkoutsScreen() {
   );
 }
 
-const Dumbbell2 = Dumbbell; // alias for empty state
+
 
 const styles = StyleSheet.create({
   container: {

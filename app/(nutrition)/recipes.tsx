@@ -34,10 +34,10 @@ export default function RecipesScreen() {
         name: recipe.name,
         servingSize: recipe.servings,
         servingUnit: 'serving',
-        calories: recipe.totalMacros.calories / recipe.servings,
-        protein: recipe.totalMacros.protein / recipe.servings,
-        carbs: recipe.totalMacros.carbs / recipe.servings,
-        fat: recipe.totalMacros.fat / recipe.servings,
+        calories: recipe.totals.calories / recipe.servings,
+        protein: recipe.totals.protein / recipe.servings,
+        carbs: recipe.totals.carbs / recipe.servings,
+        fat: recipe.totals.fat / recipe.servings,
         source: 'custom',
         isCustom: true,
       },
@@ -57,10 +57,10 @@ export default function RecipesScreen() {
 
   const renderRecipe = ({ item }: { item: Recipe }) => {
     const perServing = {
-      calories: Math.round(item.totalMacros.calories / item.servings),
-      protein: Math.round(item.totalMacros.protein / item.servings),
-      carbs: Math.round(item.totalMacros.carbs / item.servings),
-      fat: Math.round(item.totalMacros.fat / item.servings),
+      calories: Math.round(item.totals.calories / item.servings),
+      protein: Math.round(item.totals.protein / item.servings),
+      carbs: Math.round(item.totals.carbs / item.servings),
+      fat: Math.round(item.totals.fat / item.servings),
     };
 
     return (
@@ -107,7 +107,7 @@ export default function RecipesScreen() {
             style={styles.deleteBtn}
             onPress={() => handleDelete(item.id)}
           >
-            <Trash2 size={14} color={NutritionColors.danger} />
+            <Trash2 size={14} color={NutritionColors.error} />
           </TouchableOpacity>
         </View>
       </View>

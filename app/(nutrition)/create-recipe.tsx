@@ -27,7 +27,7 @@ import NutritionColors from '@/constants/nutritionColors';
 import { RecipeIngredient, FoodSearchResult, FoodItem } from '@/types/nutrition';
 
 export default function CreateRecipeScreen() {
-  const { searchFoods, addRecipe } = useNutrition();
+  const { searchFoods, createRecipe } = useNutrition();
   const router = useRouter();
 
   const [name, setName] = useState('');
@@ -75,6 +75,7 @@ export default function CreateRecipeScreen() {
 
   const handleAddIngredient = (food: FoodSearchResult) => {
     const newIngredient: RecipeIngredient = {
+      id: `ing_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       foodItem: {
         id: food.id,
         name: food.name,
@@ -127,11 +128,10 @@ export default function CreateRecipeScreen() {
       return;
     }
 
-    addRecipe({
+    createRecipe({
       name: name.trim(),
       servings: parseFloat(servings) || 1,
       ingredients,
-      totalMacros,
     });
 
     Alert.alert('Recipe Saved!', '', [
@@ -279,7 +279,7 @@ export default function CreateRecipeScreen() {
                     onPress={() => handleRemoveIngredient(index)}
                     style={{ marginLeft: 8 }}
                   >
-                    <X size={16} color={NutritionColors.danger} />
+                    <X size={16} color={NutritionColors.error} />
                   </TouchableOpacity>
                 </View>
               </View>

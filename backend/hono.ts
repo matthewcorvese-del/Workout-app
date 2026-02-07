@@ -123,7 +123,7 @@ app.post('/api/oauth/webhook-setup', async (c) => {
 app.get('/api/oura-webhook', (c) => {
   const verificationToken = c.req.query('verification_token');
 
-  if (verificationToken === OURA_VERIFICATION_TOKEN) {
+  if (verificationToken && verificationToken === OURA_VERIFICATION_TOKEN) {
     return c.text(verificationToken, 200);
   }
 

@@ -25,20 +25,22 @@ import NutritionColors from '@/constants/nutritionColors';
 
 export default function NutritionSettingsScreen() {
   const { nutritionSettings, updateNutritionSettings } = useNutrition();
-  const { isConnected, dailyActivity } = useOura();
-  const { profile } = useSettings();
+  const { isConnected, data } = useOura();
+  const { settings } = useSettings();
+  const dailyActivity = data.dailyActivity;
+  const profile = settings.profile;
 
   const [calorieGoal, setCalorieGoal] = useState(
     String(nutritionSettings.calorieGoal)
   );
   const [proteinGoal, setProteinGoal] = useState(
-    String(nutritionSettings.macroGoals.protein)
+    String(nutritionSettings.proteinGoal)
   );
   const [carbsGoal, setCarbsGoal] = useState(
-    String(nutritionSettings.macroGoals.carbs)
+    String(nutritionSettings.carbsGoal)
   );
   const [fatGoal, setFatGoal] = useState(
-    String(nutritionSettings.macroGoals.fat)
+    String(nutritionSettings.fatGoal)
   );
   const [useOuraCalories, setUseOuraCalories] = useState(
     nutritionSettings.useOuraCalories ?? false
@@ -52,7 +54,9 @@ export default function NutritionSettingsScreen() {
 
     updateNutritionSettings({
       calorieGoal: cal,
-      macroGoals: { protein: p, carbs: c, fat: f },
+      proteinGoal: p,
+      carbsGoal: c,
+      fatGoal: f,
       useOuraCalories,
     });
 
@@ -123,13 +127,13 @@ export default function NutritionSettingsScreen() {
                 <Text style={styles.ouraInfoText}>
                   Today's active calories:{' '}
                   <Text style={{ fontWeight: '700' }}>
-                    {dailyActivity.active_calories ?? '--'} cal
+                    {dailyActivity.activeCalories ?? '--'} cal
                   </Text>
                 </Text>
                 <Text style={styles.ouraInfoText}>
                   Total burn:{' '}
                   <Text style={{ fontWeight: '700' }}>
-                    {dailyActivity.total_calories ?? '--'} cal
+                    {dailyActivity.totalCalories ?? '--'} cal
                   </Text>
                 </Text>
               </View>
@@ -212,7 +216,7 @@ export default function NutritionSettingsScreen() {
               Macro total:{' '}
               <Text style={{ fontWeight: '700' }}>{macroTotal} cal</Text>
               {Math.abs(macroTotal - (parseInt(calorieGoal) || 0)) > 50 && (
-                <Text style={{ color: NutritionColors.danger }}>
+                <Text style={{ color: NutritionColors.error }}>
                   {' '}
                   (
                   {macroTotal > (parseInt(calorieGoal) || 0)
@@ -235,13 +239,13 @@ export default function NutritionSettingsScreen() {
             <View style={styles.profileItem}>
               <Scale size={14} color={NutritionColors.textMuted} />
               <Text style={styles.profileText}>
-                {profile.weight ? `${profile.weight} kg` : 'Not set'}
+                {profile.weightKg ? `${profile.weightKg} kg` : 'Not set'}
               </Text>
             </View>
             <View style={styles.profileItem}>
               <Ruler size={14} color={NutritionColors.textMuted} />
               <Text style={styles.profileText}>
-                {profile.height ? `${profile.height} cm` : 'Not set'}
+                {profile.heightCm ? `${profile.heightCm} cm` : 'Not set'}
               </Text>
             </View>
             <View style={styles.profileItem}>

@@ -5,7 +5,7 @@ export interface Context {
   // Add user context, auth, etc. as needed
 }
 
-export function createContext(): Context {
+export function createContext(): Record<string, unknown> {
   return {};
 }
 
