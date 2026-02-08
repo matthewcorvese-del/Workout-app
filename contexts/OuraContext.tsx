@@ -42,6 +42,7 @@ export interface OuraDailyActivity {
   activeMinutes: number;
   sedentaryMinutes: number;
   meetDailyTargets: number;
+  isPartial?: boolean; // Flag indicating if data is incomplete for the day
 }
 
 export interface OuraHeartRate {
@@ -201,6 +202,8 @@ export function OuraProvider({ children }: { children: React.ReactNode }) {
   // ─── OAuth Connect ───
 
   const connect = useCallback(async () => {
+    console.log('[Oura] 🔵 Starting OAuth connection...');
+    console.log('[Oura] Backend URL:', BACKEND_URL);
     setIsLoading(true);
     try {
       const authUrl =
@@ -211,14 +214,18 @@ export function OuraProvider({ children }: { children: React.ReactNode }) {
         `&scope=${SCOPES.join('+')}` +
         `&state=${Math.random().toString(36).substring(7)}`;
 
+      console.log('[Oura] 🌐 Opening auth session...');
       const result = await WebBrowser.openAuthSessionAsync(authUrl, REDIRECT_URI);
+      console.log('[Oura] Auth session result:', result.type);
 
       if (result.type === 'success' && result.url) {
         const url = new URL(result.url);
         const code = url.searchParams.get('code');
+        console.log('[Oura] ✅ Got authorization code');
 
         if (code) {
           // Exchange code for tokens via backend proxy
+          console.log('[Oura] 🔄 Exchanging code for tokens...');
           const response = await fetch(`${BACKEND_URL}/api/oauth/token`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -230,6 +237,7 @@ export function OuraProvider({ children }: { children: React.ReactNode }) {
           });
 
           if (response.ok) {
+            console.log('[Oura] ✅ Token exchange successful');
             const data = await response.json();
             const newTokens: OuraTokens = {
               access_token: data.access_token,
@@ -237,6 +245,7 @@ export function OuraProvider({ children }: { children: React.ReactNode }) {
               expires_at: Date.now() + (data.expires_in || 3600) * 1000,
               token_type: data.token_type || 'Bearer',
             };
+            console.log('[Oura] 💾 Saving tokens...');
             await saveTokens(newTokens);
 
             // Set up webhooks if configured
@@ -253,12 +262,20 @@ export function OuraProvider({ children }: { children: React.ReactNode }) {
             }
 
             // Fetch initial data
+            console.log('[Oura] 📊 Fetching initial data...');
             await fetchAllData(data.access_token);
+            console.log('[Oura] ✅ Connection complete!');
+          } else {
+            console.error('[Oura] ❌ Token exchange failed:', response.status, await response.text());
           }
+        } else {
+          console.warn('[Oura] ⚠️ No authorization code in redirect');
         }
+      } else {
+        console.log('[Oura] ⚠️ Auth session cancelled or failed:', result.type);
       }
     } catch (err) {
-      console.error('OAuth connect error:', err);
+      console.error('[Oura] ❌ OAuth connect error:', err);
     } finally {
       setIsLoading(false);
     }
@@ -277,24 +294,35 @@ export function OuraProvider({ children }: { children: React.ReactNode }) {
       const queryString = params
         ? '?' + new URLSearchParams(params).toString()
         : '';
-      const response = await fetch(`${OURA_API_BASE}${endpoint}${queryString}`, {
+      const url = `${OURA_API_BASE}${endpoint}${queryString}`;
+      console.log('[Oura] 🌐 Fetching:', url);
+      const response = await fetch(url, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
-      if (!response.ok) throw new Error(`Oura API error: ${response.status}`);
-      return response.json();
+      if (!response.ok) {
+        const body = await response.text();
+        console.error('[Oura] ❌ API error:', response.status, body);
+        throw new Error(`Oura API error: ${response.status} - ${body}`);
+      }
+      const json = await response.json();
+      return json;
     },
     []
   );
 
   const fetchAllData = useCallback(
     async (accessToken: string) => {
-      const today = new Date().toISOString().split('T')[0];
+      const now = new Date();
+      const today = now.toISOString().split('T')[0];
+      const yesterday = new Date(now.getTime() - 86400000).toISOString().split('T')[0];
       const params = { start_date: today, end_date: today };
+      // Activity needs a wider range — today's summary may not exist yet
+      const activityParams = { start_date: yesterday, end_date: today };
 
       try {
         const [activityRes, heartRateRes, workoutRes, sleepRes, stressRes] =
           await Promise.allSettled([
-            fetchFromOura('/usercollection/daily_activity', accessToken, params),
+            fetchFromOura('/usercollection/daily_activity', accessToken, activityParams),
             fetchFromOura('/usercollection/heartrate', accessToken, params),
             fetchFromOura('/usercollection/workout', accessToken, params),
             fetchFromOura('/usercollection/daily_sleep', accessToken, params),
@@ -303,8 +331,33 @@ export function OuraProvider({ children }: { children: React.ReactNode }) {
 
         const newData: OuraData = { ...emptyData, lastFetched: new Date().toISOString() };
 
-        if (activityRes.status === 'fulfilled' && activityRes.value.data?.[0]) {
-          const a = activityRes.value.data[0];
+        // Log raw API responses
+        console.log('[Oura] 📡 Activity response status:', activityRes.status);
+        if (activityRes.status === 'fulfilled') {
+          console.log('[Oura] 📡 Activity raw data:', JSON.stringify(activityRes.value, null, 2));
+        } else {
+          console.log('[Oura] ❌ Activity fetch failed:', activityRes.reason);
+        }
+
+        if (activityRes.status === 'fulfilled' && activityRes.value.data?.length > 0) {
+          const allDays = activityRes.value.data;
+          console.log(`[Oura] 📊 Activity: got ${allDays.length} day(s) of data`);
+          
+          // Prefer today's data, fall back to most recent (yesterday)
+          const todayData = allDays.find((d: any) => d.day === today);
+          const a = todayData || allDays[allDays.length - 1]; // fallback to latest
+          const isFromToday = a.day === today;
+          
+          console.log('[Oura] 📊 Using activity for day:', a.day, '(isFromToday:', isFromToday, ')');
+          console.log('[Oura] 📊 Fields — steps:', a.steps, '| active_calories:', a.active_calories, '| total_calories:', a.total_calories, '| high_activity_time:', a.high_activity_time);
+          
+          // Daily activity is considered complete after 4 AM the next day (Oura's day boundary)
+          const dataDay = new Date(a.day + 'T00:00:00');
+          const dayAfterData = new Date(dataDay);
+          dayAfterData.setDate(dayAfterData.getDate() + 1);
+          dayAfterData.setHours(4, 0, 0, 0);
+          const isComplete = now >= dayAfterData;
+          
           newData.dailyActivity = {
             date: a.day || today,
             totalCalories: a.total_calories || 0,
@@ -317,16 +370,30 @@ export function OuraProvider({ children }: { children: React.ReactNode }) {
               ? Math.round(a.sedentary_time / 60)
               : 0,
             meetDailyTargets: a.meet_daily_targets || 0,
+            isPartial: isFromToday && !isComplete,
           };
 
-          // Update calorie estimator with actual data
-          await calorieEstimator.recordActualCalories(
-            today,
-            newData.dailyActivity.totalCalories,
-            newData.dailyActivity.steps,
-            newData.dailyActivity.activeMinutes
-          );
+          console.log('[Oura] ✅ Parsed dailyActivity:', JSON.stringify(newData.dailyActivity));
+
+          // Only update calorie estimator with complete data
+          if (isComplete) {
+            await calorieEstimator.recordActualCalories(
+              a.day,
+              newData.dailyActivity.totalCalories,
+              newData.dailyActivity.steps,
+              newData.dailyActivity.activeMinutes
+            );
+          } else {
+            console.log('[Oura] Partial/in-progress daily activity data - will refresh more frequently');
+          }
+        } else if (activityRes.status === 'fulfilled') {
+          console.log('[Oura] ⚠️ No activity data for yesterday or today. Response:', JSON.stringify(activityRes.value));
         }
+
+        console.log('[Oura] 📡 HeartRate status:', heartRateRes.status, heartRateRes.status === 'fulfilled' ? `(${heartRateRes.value.data?.length ?? 0} entries)` : '');
+        console.log('[Oura] 📡 Workout status:', workoutRes.status, workoutRes.status === 'fulfilled' ? `(${workoutRes.value.data?.length ?? 0} entries)` : '');
+        console.log('[Oura] 📡 Sleep status:', sleepRes.status);
+        console.log('[Oura] 📡 Stress status:', stressRes.status);
 
         if (heartRateRes.status === 'fulfilled' && heartRateRes.value.data) {
           newData.heartRate = heartRateRes.value.data.map((hr: any) => ({
@@ -379,11 +446,18 @@ export function OuraProvider({ children }: { children: React.ReactNode }) {
         setData(newData);
         await AsyncStorage.setItem(OURA_DATA_KEY, JSON.stringify(newData));
 
-        // Update estimated calories
-        setEstimatedCalories(
-          newData.dailyActivity?.totalCalories ||
-            calorieEstimator.estimateCaloriesAtTime(new Date().getHours())
-        );
+        // Update estimated calories based on whether data is complete
+        if (newData.dailyActivity?.isPartial) {
+          // For partial data, show estimated total for the full day
+          setEstimatedCalories(
+            calorieEstimator.estimateCaloriesAtTime(24) // Estimate for full day
+          );
+        } else {
+          setEstimatedCalories(
+            newData.dailyActivity?.totalCalories ||
+              calorieEstimator.estimateCaloriesAtTime(new Date().getHours())
+          );
+        }
       } catch (err) {
         console.error('Error fetching Oura data:', err);
       }
@@ -402,14 +476,27 @@ export function OuraProvider({ children }: { children: React.ReactNode }) {
     }
   }, [refreshTokenIfNeeded, fetchAllData]);
 
-  // Auto-refresh every 15 minutes when connected
+  // Auto-refresh with adaptive frequency based on data completeness
   useEffect(() => {
     if (!isConnected) return;
-    const interval = setInterval(refreshData, 15 * 60 * 1000);
+    
+    // Check if we have partial data
+    const hasPartialData = data.dailyActivity?.isPartial;
+    
+    // Refresh more frequently (every 5 minutes) if data is partial
+    // Otherwise, refresh every 15 minutes
+    const refreshInterval = hasPartialData ? 5 * 60 * 1000 : 15 * 60 * 1000;
+    
+    console.log(`[Oura] Auto-refresh interval: ${refreshInterval / 60000} minutes${hasPartialData ? ' (partial data)' : ''}`);
+    
+    const interval = setInterval(refreshData, refreshInterval);
     return () => clearInterval(interval);
-  }, [isConnected, refreshData]);
+  }, [isConnected, refreshData, data.dailyActivity?.isPartial]);
 
-  const actualCalories = data.dailyActivity?.totalCalories ?? null;
+  // Only report actual calories if data is complete (not partial)
+  const actualCalories = data.dailyActivity?.isPartial 
+    ? null // Don't report partial data as "actual"
+    : (data.dailyActivity?.totalCalories ?? null);
 
   return (
     <OuraContext.Provider

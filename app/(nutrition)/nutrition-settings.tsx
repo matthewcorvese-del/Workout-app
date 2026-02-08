@@ -17,6 +17,10 @@ import {
   Scale,
   Ruler,
   Flame,
+  Link,
+  Unlink,
+  RefreshCw,
+  ChevronRight,
 } from 'lucide-react-native';
 import { useNutrition } from '@/contexts/NutritionContext';
 import { useOura } from '@/contexts/OuraContext';
@@ -25,7 +29,7 @@ import NutritionColors from '@/constants/nutritionColors';
 
 export default function NutritionSettingsScreen() {
   const { nutritionSettings, updateNutritionSettings } = useNutrition();
-  const { isConnected, data } = useOura();
+  const { isConnected, isLoading, data, connect, disconnect, refreshData } = useOura();
   const { settings } = useSettings();
   const dailyActivity = data.dailyActivity;
   const profile = settings.profile;
@@ -63,6 +67,33 @@ export default function NutritionSettingsScreen() {
     Alert.alert('Saved', 'Nutrition settings updated.');
   };
 
+  const handleOuraToggle = () => {
+    if (isConnected) {
+      Alert.alert('Disconnect Oura Ring', 'Are you sure?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Disconnect', style: 'destructive', onPress: disconnect },
+      ]);
+    } else {
+      connect();
+    }
+  };
+
+  const formatLastSynced = (timestamp: string | null) => {
+    if (!timestamp) return 'Never';
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+  };
+
   const macroCalories = {
     protein: (parseInt(proteinGoal) || 0) * 4,
     carbs: (parseInt(carbsGoal) || 0) * 4,
@@ -94,52 +125,117 @@ export default function NutritionSettingsScreen() {
           </Text>
         </View>
 
-        {/* Oura Integration */}
-        {isConnected && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Activity size={18} color={NutritionColors.primary} />
-              <Text style={styles.sectionTitle}>Oura Ring Integration</Text>
-            </View>
-            <View style={styles.switchRow}>
+        {/* Oura Ring Integration */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Activity size={18} color={NutritionColors.primary} />
+            <Text style={styles.sectionTitle}>Oura Ring</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.ouraConnectionRow}
+            onPress={handleOuraToggle}
+            activeOpacity={0.7}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+              {isConnected ? (
+                <Link size={18} color={NutritionColors.success} />
+              ) : (
+                <Unlink size={18} color={NutritionColors.textMuted} />
+              )}
               <View style={{ flex: 1 }}>
                 <Text style={styles.switchLabel}>
-                  Use Oura calorie estimates
+                  {isConnected ? 'Connected' : 'Connect Oura Ring'}
                 </Text>
                 <Text style={styles.switchHint}>
-                  Adjust your calorie goal based on Oura activity data
+                  {isConnected
+                    ? 'Tap to disconnect'
+                    : 'Sync activity, sleep & heart rate'}
                 </Text>
               </View>
-              <Switch
-                value={useOuraCalories}
-                onValueChange={setUseOuraCalories}
-                trackColor={{
-                  false: NutritionColors.cardBorder,
-                  true: NutritionColors.primary + '80',
-                }}
-                thumbColor={
-                  useOuraCalories ? NutritionColors.primary : '#999'
-                }
-              />
             </View>
-            {dailyActivity && (
-              <View style={styles.ouraInfo}>
-                <Text style={styles.ouraInfoText}>
-                  Today's active calories:{' '}
-                  <Text style={{ fontWeight: '700' }}>
-                    {dailyActivity.activeCalories ?? '--'} cal
-                  </Text>
-                </Text>
-                <Text style={styles.ouraInfoText}>
-                  Total burn:{' '}
-                  <Text style={{ fontWeight: '700' }}>
-                    {dailyActivity.totalCalories ?? '--'} cal
-                  </Text>
-                </Text>
+            <ChevronRight size={18} color={NutritionColors.textMuted} />
+          </TouchableOpacity>
+
+          {isConnected && (
+            <>
+              <View style={styles.ouraDivider} />
+              <View style={styles.ouraDataSection}>
+                {dailyActivity && dailyActivity.date !== new Date().toISOString().split('T')[0] && (
+                  <Text style={styles.ouraDataPartial}>Showing yesterday's data — today's not yet available</Text>
+                )}
+                <View style={styles.ouraDataRow}>
+                  <View style={styles.ouraDataItem}>
+                    <Text style={styles.ouraDataLabel}>Steps</Text>
+                    <Text style={styles.ouraDataValue}>
+                      {dailyActivity?.steps?.toLocaleString() ?? '--'}
+                    </Text>
+                  </View>
+                  <View style={styles.ouraDataItem}>
+                    <Text style={styles.ouraDataLabel}>Active Calories</Text>
+                    <Text style={styles.ouraDataValue}>
+                      {dailyActivity?.activeCalories ?? '--'}
+                      {dailyActivity && <Text style={styles.ouraDataUnit}> cal</Text>}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.ouraDataRow}>
+                  <View style={styles.ouraDataItem}>
+                    <Text style={styles.ouraDataLabel}>Est. Daily Burn</Text>
+                    <Text style={styles.ouraDataValue}>
+                      {dailyActivity?.totalCalories ?? '--'}
+                      {dailyActivity && <Text style={styles.ouraDataUnit}> cal</Text>}
+                    </Text>
+                    {dailyActivity?.isPartial && (
+                      <Text style={styles.ouraDataPartial}>(in progress)</Text>
+                    )}
+                  </View>
+                  <View style={styles.ouraDataItem}>
+                    <Text style={styles.ouraDataLabel}>Last Synced</Text>
+                    <Text style={styles.ouraDataValue}>
+                      {formatLastSynced(data.lastFetched)}
+                    </Text>
+                  </View>
+                </View>
               </View>
-            )}
-          </View>
-        )}
+
+              <View style={styles.ouraDivider} />
+              <TouchableOpacity
+                style={styles.refreshRow}
+                onPress={refreshData}
+                disabled={isLoading}
+                activeOpacity={0.7}
+              >
+                <RefreshCw size={18} color={NutritionColors.primary} />
+                <Text style={styles.switchLabel}>
+                  {isLoading ? 'Refreshing...' : 'Refresh Data'}
+                </Text>
+              </TouchableOpacity>
+
+              <View style={styles.ouraDivider} />
+              <View style={styles.switchRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.switchLabel}>
+                    Use Oura calorie estimates
+                  </Text>
+                  <Text style={styles.switchHint}>
+                    Adjust your calorie goal based on Oura activity data
+                  </Text>
+                </View>
+                <Switch
+                  value={useOuraCalories}
+                  onValueChange={setUseOuraCalories}
+                  trackColor={{
+                    false: NutritionColors.cardBorder,
+                    true: NutritionColors.primary + '80',
+                  }}
+                  thumbColor={
+                    useOuraCalories ? NutritionColors.primary : '#999'
+                  }
+                />
+              </View>
+            </>
+          )}
+        </View>
 
         {/* Macro Goals */}
         <View style={styles.section}>
@@ -337,15 +433,58 @@ const styles = StyleSheet.create({
     color: NutritionColors.textMuted,
     marginTop: 2,
   },
-  ouraInfo: {
+  ouraConnectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+  },
+  ouraDataSection: {
+    gap: 12,
+    paddingVertical: 12,
+  },
+  ouraDataRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  ouraDataItem: {
+    flex: 1,
     backgroundColor: NutritionColors.inputBackground,
     borderRadius: 8,
     padding: 10,
     gap: 4,
   },
-  ouraInfoText: {
-    fontSize: 13,
+  ouraDataLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: NutritionColors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  ouraDataValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: NutritionColors.text,
+  },
+  ouraDataUnit: {
+    fontSize: 12,
+    fontWeight: '500',
     color: NutritionColors.textSecondary,
+  },
+  ouraDataPartial: {
+    fontSize: 10,
+    color: NutritionColors.textMuted,
+    marginTop: 2,
+  },
+  refreshRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 12,
+  },
+  ouraDivider: {
+    height: 1,
+    backgroundColor: NutritionColors.cardBorder,
   },
   macroInputRow: {
     flexDirection: 'row',

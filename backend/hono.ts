@@ -41,6 +41,13 @@ app.post('/api/oauth/token', async (c) => {
     const body = await c.req.json();
     const { code, redirect_uri, grant_type, refresh_token } = body;
 
+    console.log('[Backend] 🔄 Token exchange request:', {
+      grant_type: grant_type || 'authorization_code',
+      has_code: !!code,
+      has_refresh_token: !!refresh_token,
+      redirect_uri,
+    });
+
     const params = new URLSearchParams();
     params.set('client_id', OURA_CLIENT_ID);
     params.set('client_secret', OURA_CLIENT_SECRET);
@@ -53,6 +60,8 @@ app.post('/api/oauth/token', async (c) => {
       params.set('redirect_uri', redirect_uri || 'workout-tracker-app-v3://oauth');
     }
 
+    console.log('[Backend] 📤 Sending to Oura:', Object.fromEntries(params.entries()));
+
     const response = await fetch(OURA_TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -62,9 +71,11 @@ app.post('/api/oauth/token', async (c) => {
     const data = await response.json();
 
     if (!response.ok) {
+      console.error('[Backend] ❌ Oura API error:', response.status, data);
       return c.json({ error: 'Token exchange failed', details: data }, 400);
     }
 
+    console.log('[Backend] ✅ Token exchange successful');
     return c.json(data);
   } catch (err) {
     console.error('OAuth token exchange error:', err);

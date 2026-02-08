@@ -7,7 +7,6 @@ import {
   TextInput,
   StyleSheet,
   Switch,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -15,18 +14,12 @@ import {
   Scale,
   Ruler,
   Activity,
-  Link,
-  Unlink,
-  RefreshCw,
-  ChevronRight,
 } from 'lucide-react-native';
 import { useSettings } from '@/contexts/SettingsContext';
-import { useOura } from '@/contexts/OuraContext';
 import Colors from '@/constants/colors';
 
 export default function SettingsScreen() {
   const { settings, updateSettings, updateProfile } = useSettings();
-  const { isConnected, isLoading, connect, disconnect, refreshData } = useOura();
   const [editingField, setEditingField] = useState<string | null>(null);
 
   const activityLevels = [
@@ -36,17 +29,6 @@ export default function SettingsScreen() {
     { value: 'active', label: 'Active' },
     { value: 'very_active', label: 'Very Active' },
   ];
-
-  const handleOuraToggle = () => {
-    if (isConnected) {
-      Alert.alert('Disconnect Oura Ring', 'Are you sure?', [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Disconnect', style: 'destructive', onPress: disconnect },
-      ]);
-    } else {
-      connect();
-    }
-  };
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right']}>
@@ -213,54 +195,6 @@ export default function SettingsScreen() {
               thumbColor="#fff"
             />
           </View>
-        </View>
-
-        {/* Oura Ring */}
-        <Text style={styles.sectionTitle}>Oura Ring</Text>
-        <View style={styles.card}>
-          <TouchableOpacity
-            style={styles.row}
-            onPress={handleOuraToggle}
-            activeOpacity={0.7}
-          >
-            <View style={styles.rowLeft}>
-              {isConnected ? (
-                <Link size={18} color={Colors.success} />
-              ) : (
-                <Unlink size={18} color={Colors.textMuted} />
-              )}
-              <View>
-                <Text style={styles.rowLabel}>
-                  {isConnected ? 'Connected' : 'Connect Oura Ring'}
-                </Text>
-                <Text style={styles.rowSublabel}>
-                  {isConnected
-                    ? 'Tap to disconnect'
-                    : 'Sync activity, sleep & heart rate'}
-                </Text>
-              </View>
-            </View>
-            <ChevronRight size={18} color={Colors.textMuted} />
-          </TouchableOpacity>
-
-          {isConnected && (
-            <>
-              <View style={styles.divider} />
-              <TouchableOpacity
-                style={styles.row}
-                onPress={refreshData}
-                disabled={isLoading}
-                activeOpacity={0.7}
-              >
-                <View style={styles.rowLeft}>
-                  <RefreshCw size={18} color={Colors.primary} />
-                  <Text style={styles.rowLabel}>
-                    {isLoading ? 'Refreshing...' : 'Refresh Data'}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            </>
-          )}
         </View>
 
         {/* App Info */}

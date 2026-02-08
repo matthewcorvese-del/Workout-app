@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Dumbbell, Apple } from 'lucide-react-native';
 import { useAppMode } from '@/contexts/AppModeContext';
 import Colors from '@/constants/colors';
@@ -7,6 +8,7 @@ import NutritionColors from '@/constants/nutritionColors';
 
 export default function TopNavigationRibbon() {
   const { mode, setMode, animationProgress } = useAppMode();
+  const insets = useSafeAreaInsets();
 
   const backgroundColor = animationProgress.interpolate({
     inputRange: [0, 1],
@@ -24,7 +26,12 @@ export default function TopNavigationRibbon() {
   });
 
   return (
-    <Animated.View style={[styles.container, { backgroundColor }]}>
+    <Animated.View
+      style={[
+        styles.container,
+        { backgroundColor, paddingTop: insets.top + 4 },
+      ]}
+    >
       <View style={styles.tabs}>
         <TouchableOpacity
           style={styles.tab}

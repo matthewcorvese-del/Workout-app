@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -46,8 +46,13 @@ export default function WorkoutsScreen() {
   const [searchQuery, setSearchQuery] = useState('');
 
   // Redirect to nutrition if in nutrition mode
+  useEffect(() => {
+    if (mode === 'nutrition') {
+      router.replace('/(nutrition)/home');
+    }
+  }, [mode, router]);
+
   if (mode === 'nutrition') {
-    router.replace('/(nutrition)/home');
     return null;
   }
 

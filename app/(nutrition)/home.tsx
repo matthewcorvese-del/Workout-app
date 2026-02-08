@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -24,8 +24,13 @@ export default function NutritionHomeScreen() {
   const { estimatedCalories, actualCalories } = useOura();
 
   // Redirect to fitness if in fitness mode
+  useEffect(() => {
+    if (mode === 'fitness') {
+      router.replace('/(tabs)');
+    }
+  }, [mode, router]);
+
   if (mode === 'fitness') {
-    router.replace('/(tabs)');
     return null;
   }
 
