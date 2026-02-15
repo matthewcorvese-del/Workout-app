@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { WeightUnit } from '@/types/workout';
+import { HeightUnit, WeightUnit } from '@/types/workout';
 
 const SETTINGS_KEY = 'user_settings';
 
@@ -15,6 +15,7 @@ export interface UserProfile {
 
 export interface Settings {
   weightUnit: WeightUnit;
+  heightUnit: HeightUnit;
   defaultRestTimer: number;   // seconds
   autoStartRestTimer: boolean;
   showWarmupSets: boolean;
@@ -33,6 +34,7 @@ const defaultProfile: UserProfile = {
 
 const defaultSettings: Settings = {
   weightUnit: 'lbs',
+  heightUnit: 'metric',
   defaultRestTimer: 90,
   autoStartRestTimer: true,
   showWarmupSets: true,

@@ -7,7 +7,6 @@ import {
   ScrollView,
   StyleSheet,
   Alert,
-  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -26,6 +25,8 @@ import { useNutrition } from '@/contexts/NutritionContext';
 import { useOura } from '@/contexts/OuraContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import NutritionColors from '@/constants/nutritionColors';
+import AppToggle from '@/components/AppToggle';
+import { useProfileDisplayValues } from '@/hooks/useProfileDisplayValues';
 
 export default function NutritionSettingsScreen() {
   const { nutritionSettings, updateNutritionSettings } = useNutrition();
@@ -33,6 +34,12 @@ export default function NutritionSettingsScreen() {
   const { settings } = useSettings();
   const dailyActivity = data.dailyActivity;
   const profile = settings.profile;
+
+  const { displayWeight, displayHeight } = useProfileDisplayValues({
+    profile,
+    weightUnit: settings.weightUnit,
+    heightUnit: settings.heightUnit,
+  });
 
   const [calorieGoal, setCalorieGoal] = useState(
     String(nutritionSettings.calorieGoal)
@@ -161,7 +168,7 @@ export default function NutritionSettingsScreen() {
               <View style={styles.ouraDivider} />
               <View style={styles.ouraDataSection}>
                 {dailyActivity && dailyActivity.date !== new Date().toISOString().split('T')[0] && (
-                  <Text style={styles.ouraDataPartial}>Showing yesterday's data — today's not yet available</Text>
+                  <Text style={styles.ouraDataPartial}>Showing yesterday&apos;s data — today&apos;s not yet available</Text>
                 )}
                 <View style={styles.ouraDataRow}>
                   <View style={styles.ouraDataItem}>
@@ -221,16 +228,14 @@ export default function NutritionSettingsScreen() {
                     Adjust your calorie goal based on Oura activity data
                   </Text>
                 </View>
-                <Switch
+                <AppToggle
                   value={useOuraCalories}
                   onValueChange={setUseOuraCalories}
-                  trackColor={{
-                    false: NutritionColors.cardBorder,
-                    true: NutritionColors.primary + '80',
-                  }}
-                  thumbColor={
-                    useOuraCalories ? NutritionColors.primary : '#999'
-                  }
+                  accessibilityLabel="Use Oura calorie estimates"
+                  activeTrackColor={NutritionColors.primary + '80'}
+                  inactiveTrackColor={NutritionColors.cardBorder}
+                  activeThumbColor={NutritionColors.primary}
+                  inactiveThumbColor="#999"
                 />
               </View>
             </>
@@ -334,15 +339,11 @@ export default function NutritionSettingsScreen() {
           <View style={styles.profileRow}>
             <View style={styles.profileItem}>
               <Scale size={14} color={NutritionColors.textMuted} />
-              <Text style={styles.profileText}>
-                {profile.weightKg ? `${profile.weightKg} kg` : 'Not set'}
-              </Text>
+              <Text style={styles.profileText}>{displayWeight}</Text>
             </View>
             <View style={styles.profileItem}>
               <Ruler size={14} color={NutritionColors.textMuted} />
-              <Text style={styles.profileText}>
-                {profile.heightCm ? `${profile.heightCm} cm` : 'Not set'}
-              </Text>
+              <Text style={styles.profileText}>{displayHeight}</Text>
             </View>
             <View style={styles.profileItem}>
               <Activity size={14} color={NutritionColors.textMuted} />

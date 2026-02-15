@@ -24,7 +24,7 @@ import {
 } from 'lucide-react-native';
 import { useNutrition } from '@/contexts/NutritionContext';
 import NutritionColors from '@/constants/nutritionColors';
-import { RecipeIngredient, FoodSearchResult, FoodItem } from '@/types/nutrition';
+import { RecipeIngredient, FoodSearchResult } from '@/types/nutrition';
 
 export default function CreateRecipeScreen() {
   const { searchFoods, createRecipe } = useNutrition();
@@ -287,7 +287,7 @@ export default function CreateRecipeScreen() {
 
             {ingredients.length === 0 && (
               <Text style={styles.noIngredients}>
-                Tap "Add" to search and add ingredients
+                Tap &quot;Add&quot; to search and add ingredients
               </Text>
             )}
           </View>

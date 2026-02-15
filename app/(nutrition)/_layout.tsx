@@ -1,7 +1,6 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { Home, Utensils, BookOpen, Settings } from 'lucide-react-native';
-import { useAppMode } from '@/contexts/AppModeContext';
 import NutritionColors from '@/constants/nutritionColors';
 import TopNavigationRibbon from '@/components/TopNavigationRibbon';
 import { View } from 'react-native';

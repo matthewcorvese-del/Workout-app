@@ -6,13 +6,15 @@ import {
   getRecentWebhookEvents,
 } from '../../services/oura-webhook-storage';
 
+const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected date format YYYY-MM-DD');
+
 export const ouraRouter = router({
   // Get activity data for a specific date
   getDailyActivity: publicProcedure
     .input(
       z.object({
         userId: z.string(),
-        date: z.string(), // YYYY-MM-DD
+        date: isoDateSchema,
       })
     )
     .query(({ input }) => {
@@ -25,8 +27,8 @@ export const ouraRouter = router({
     .input(
       z.object({
         userId: z.string(),
-        startDate: z.string(),
-        endDate: z.string(),
+        startDate: isoDateSchema,
+        endDate: isoDateSchema,
       })
     )
     .query(({ input }) => {

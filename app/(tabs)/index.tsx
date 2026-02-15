@@ -14,7 +14,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Plus,
   Play,
-  ChevronRight,
   Trash2,
   Edit3,
   Zap,
@@ -35,11 +34,13 @@ export default function WorkoutsScreen() {
   const {
     routines,
     createRoutine,
+    updateRoutine,
     deleteRoutine,
     startWorkout,
     activeSession,
   } = useWorkout();
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
   const [newRoutineName, setNewRoutineName] = useState('');
   const [newRoutineDesc, setNewRoutineDesc] = useState('');
   const [selectedExercises, setSelectedExercises] = useState<WorkoutRoutineExercise[]>([]);
@@ -80,20 +81,61 @@ export default function WorkoutsScreen() {
     ]);
   };
 
-  const handleCreateRoutine = () => {
+  const resetRoutineForm = () => {
+    setEditingRoutineId(null);
+    setNewRoutineName('');
+    setNewRoutineDesc('');
+    setSelectedExercises([]);
+    setSearchQuery('');
+  };
+
+  const handleCloseRoutineModal = () => {
+    setShowCreateModal(false);
+    resetRoutineForm();
+  };
+
+  const handleOpenCreateRoutine = () => {
+    resetRoutineForm();
+    setShowCreateModal(true);
+  };
+
+  const handleEditRoutine = (routine: WorkoutRoutine) => {
+    setEditingRoutineId(routine.id);
+    setNewRoutineName(routine.name);
+    setNewRoutineDesc(routine.description || '');
+    setSelectedExercises(
+      [...routine.exercises].sort((a, b) => a.order - b.order)
+    );
+    setSearchQuery('');
+    setShowCreateModal(true);
+  };
+
+  const handleSaveRoutine = () => {
     if (!newRoutineName.trim()) {
       Alert.alert('Error', 'Please enter a routine name');
       return;
     }
-    createRoutine({
-      name: newRoutineName.trim(),
-      description: newRoutineDesc.trim() || undefined,
-      exercises: selectedExercises,
-    });
-    setShowCreateModal(false);
-    setNewRoutineName('');
-    setNewRoutineDesc('');
-    setSelectedExercises([]);
+
+    const normalizedExercises = selectedExercises.map((exercise, index) => ({
+      ...exercise,
+      order: index,
+    }));
+
+    if (editingRoutineId) {
+      updateRoutine(editingRoutineId, {
+        name: newRoutineName.trim(),
+        description: newRoutineDesc.trim() || undefined,
+        exercises: normalizedExercises,
+      });
+    } else {
+      createRoutine({
+        name: newRoutineName.trim(),
+        description: newRoutineDesc.trim() || undefined,
+        exercises: normalizedExercises,
+      });
+    }
+
+    handleCloseRoutineModal();
   };
 
   const toggleExercise = (exerciseId: string, exerciseName: string) => {
@@ -144,6 +186,12 @@ export default function WorkoutsScreen() {
         </View>
 
         <View style={styles.routineActions}>
+          <TouchableOpacity
+            style={styles.editBtn}
+            onPress={() => handleEditRoutine(item)}
+          >
+            <Edit3 size={16} color={Colors.textSecondary} />
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.deleteBtn}
             onPress={() => handleDeleteRoutine(item.id)}
@@ -209,7 +257,7 @@ export default function WorkoutsScreen() {
       {/* FAB */}
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => setShowCreateModal(true)}
+        onPress={handleOpenCreateRoutine}
         activeOpacity={0.7}
       >
         <Plus size={24} color="#fff" />
@@ -223,11 +271,13 @@ export default function WorkoutsScreen() {
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowCreateModal(false)}>
+            <TouchableOpacity onPress={handleCloseRoutineModal}>
               <X size={24} color={Colors.text} />
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>New Routine</Text>
-            <TouchableOpacity onPress={handleCreateRoutine}>
+            <Text style={styles.modalTitle}>
+              {editingRoutineId ? 'Edit Routine' : 'New Routine'}
+            </Text>
+            <TouchableOpacity onPress={handleSaveRoutine}>
               <Text style={styles.saveText}>Save</Text>
             </TouchableOpacity>
           </View>
@@ -368,6 +418,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  editBtn: {
+    padding: 4,
   },
   deleteBtn: {
     padding: 4,

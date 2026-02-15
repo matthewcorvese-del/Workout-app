@@ -178,6 +178,7 @@ export interface ExerciseProgress {
 // ─── Helper Types ───
 
 export type WeightUnit = 'lbs' | 'kg';
+export type HeightUnit = 'metric' | 'imperial';
 
 export interface TimerState {
   isRunning: boolean;

@@ -4,18 +4,15 @@ import {
   Text,
   ScrollView,
   StyleSheet,
-  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Flame, Beef, Wheat, Droplets } from 'lucide-react-native';
+import { Beef, Wheat, Droplets } from 'lucide-react-native';
 import { useNutrition } from '@/contexts/NutritionContext';
 import { useOura } from '@/contexts/OuraContext';
 import { useAppMode } from '@/contexts/AppModeContext';
 import { useRouter } from 'expo-router';
 import NutritionColors from '@/constants/nutritionColors';
 import { MealType } from '@/types/nutrition';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function NutritionHomeScreen() {
   const { mode } = useAppMode();
@@ -36,11 +33,7 @@ export default function NutritionHomeScreen() {
 
   const { totals, goals } = todaySummary;
   const caloriesBurned = actualCalories || estimatedCalories;
-  const netCalories = totals.calories - (nutritionSettings.useOuraCalories ? caloriesBurned : 0);
   const calorieProgressPct = Math.min(totals.calories / goals.calories, 1);
-  const proteinPct = Math.min(totals.protein / goals.protein, 1);
-  const carbsPct = Math.min(totals.carbs / goals.carbs, 1);
-  const fatPct = Math.min(totals.fat / goals.fat, 1);
 
   const mealSummary: { type: MealType; label: string; color: string; calories: number }[] = [
     {
@@ -165,7 +158,7 @@ export default function NutritionHomeScreen() {
         </View>
 
         {/* Meals Summary */}
-        <Text style={styles.sectionTitle}>Today's Meals</Text>
+        <Text style={styles.sectionTitle}>Today&apos;s Meals</Text>
         {mealSummary.map((meal) => (
           <View key={meal.type} style={styles.mealCard}>
             <View

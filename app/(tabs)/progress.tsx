@@ -17,6 +17,7 @@ import {
   Calendar,
 } from 'lucide-react-native';
 import { useWorkout } from '@/contexts/WorkoutContext';
+import { useSettings } from '@/contexts/SettingsContext';
 import Colors from '@/constants/colors';
 import { WorkoutSession } from '@/types/workout';
 
@@ -26,9 +27,10 @@ type TimeFilter = '7d' | '30d' | '90d' | 'all';
 
 export default function ProgressScreen() {
   const { sessions, personalRecords, getStats } = useWorkout();
+  const { settings } = useSettings();
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('30d');
 
-  const stats = useMemo(() => getStats(), [getStats, sessions]);
+  const stats = useMemo(() => getStats(), [getStats]);
 
   const filteredSessions = useMemo(() => {
     const now = Date.now();
@@ -88,7 +90,7 @@ export default function ProgressScreen() {
         <View style={styles.sessionMetaItem}>
           <Dumbbell size={12} color={Colors.textSecondary} />
           <Text style={styles.sessionMetaText}>
-            {formatVolume(item.totalVolume)} lbs
+            {formatVolume(item.totalVolume)} {settings.weightUnit}
           </Text>
         </View>
         <View style={styles.sessionMetaItem}>
@@ -124,7 +126,7 @@ export default function ProgressScreen() {
           <Text style={styles.statValue}>
             {formatVolume(stats.totalVolume)}
           </Text>
-          <Text style={styles.statLabel}>Volume (lbs)</Text>
+          <Text style={styles.statLabel}>Volume ({settings.weightUnit})</Text>
         </View>
         <View style={styles.statCard}>
           <Flame size={18} color={Colors.warning} />
@@ -152,7 +154,8 @@ export default function ProgressScreen() {
                   {item.exerciseName}
                 </Text>
                 <Text style={styles.prValue}>
-                  {item.value} {item.unit}
+                  {item.value}{' '}
+                  {item.unit === 'lbs' ? settings.weightUnit : item.unit}
                 </Text>
                 <Text style={styles.prType}>
                   {item.type.replace(/_/g, ' ')}

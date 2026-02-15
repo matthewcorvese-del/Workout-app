@@ -1,6 +1,14 @@
-// In-memory webhook data storage
-// NOTE: This is ephemeral in serverless environments. For production,
-// replace with a database (Vercel KV, Supabase, etc.).
+// Webhook data storage with file-based persistence for development.
+// In production (Vercel serverless), replace with a database
+// (e.g. Vercel KV, Supabase, Planetscale) since the filesystem
+// is ephemeral across function invocations.
+
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const IS_DEV = process.env.NODE_ENV === 'development';
+const STORAGE_DIR = join(process.cwd(), '.data');
+const STORAGE_FILE = join(STORAGE_DIR, 'oura-webhook-data.json');
 
 export interface OuraWebhookEvent {
   event_type: string;
@@ -44,8 +52,55 @@ export interface StoredActivityData {
   updatedAt: string;
 }
 
-// In-memory store — keyed by `userId:date`
-const store = new Map<string, StoredActivityData>();
+// ─── Internal stores ───
+
+let store = new Map<string, StoredActivityData>();
+let webhookEvents: OuraWebhookEvent[] = [];
+
+// ─── File-based persistence (development) ───
+
+function loadFromDisk(): void {
+  if (!IS_DEV) return;
+  try {
+    if (existsSync(STORAGE_FILE)) {
+      const raw = readFileSync(STORAGE_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (parsed.activityData && typeof parsed.activityData === 'object') {
+        store = new Map(Object.entries(parsed.activityData));
+      }
+      if (Array.isArray(parsed.webhookEvents)) {
+        webhookEvents = parsed.webhookEvents;
+      }
+      console.log(
+        `[Storage] ✅ Loaded ${store.size} activity records and ${webhookEvents.length} events from disk`
+      );
+    }
+  } catch (err) {
+    console.error('[Storage] Failed to load from disk, starting fresh:', err);
+  }
+}
+
+function saveToDisk(): void {
+  if (!IS_DEV) return;
+  try {
+    if (!existsSync(STORAGE_DIR)) {
+      mkdirSync(STORAGE_DIR, { recursive: true });
+    }
+    const data = {
+      activityData: Object.fromEntries(store),
+      webhookEvents,
+      savedAt: new Date().toISOString(),
+    };
+    writeFileSync(STORAGE_FILE, JSON.stringify(data, null, 2));
+  } catch (err) {
+    console.error('[Storage] Failed to save to disk:', err);
+  }
+}
+
+// Initialize from disk on module load
+loadFromDisk();
+
+// ─── Public API ───
 
 export function getStorageKey(userId: string, date: string): string {
   return `${userId}:${date}`;
@@ -57,6 +112,7 @@ export function getActivityData(userId: string, date: string): StoredActivityDat
 
 export function setActivityData(data: StoredActivityData): void {
   store.set(getStorageKey(data.userId, data.date), data);
+  saveToDisk();
 }
 
 export function updateActivityData(
@@ -80,6 +136,7 @@ export function updateActivityData(
   };
 
   store.set(key, updated);
+  saveToDisk();
   return updated;
 }
 
@@ -99,17 +156,17 @@ export function clearDataForUser(userId: string): void {
       store.delete(key);
     }
   }
+  saveToDisk();
 }
 
 // Store raw webhook events for debugging
-const webhookEvents: OuraWebhookEvent[] = [];
-
 export function recordWebhookEvent(event: OuraWebhookEvent): void {
   webhookEvents.push(event);
   // Keep last 100 events
   if (webhookEvents.length > 100) {
     webhookEvents.splice(0, webhookEvents.length - 100);
   }
+  saveToDisk();
 }
 
 export function getRecentWebhookEvents(limit: number = 20): OuraWebhookEvent[] {

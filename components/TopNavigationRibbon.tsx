@@ -1,35 +1,48 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Dumbbell, Apple } from 'lucide-react-native';
+import Animated, { interpolateColor, useAnimatedStyle } from 'react-native-reanimated';
 import { useAppMode } from '@/contexts/AppModeContext';
 import Colors from '@/constants/colors';
 import NutritionColors from '@/constants/nutritionColors';
 
-export default function TopNavigationRibbon() {
+function TopNavigationRibbon() {
   const { mode, setMode, animationProgress } = useAppMode();
   const insets = useSafeAreaInsets();
+  const [indicatorTrackWidth, setIndicatorTrackWidth] = useState(0);
 
-  const backgroundColor = animationProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [Colors.background, NutritionColors.background],
+  const containerAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      backgroundColor: interpolateColor(
+        animationProgress.value,
+        [0, 1],
+        [Colors.background, NutritionColors.background]
+      ),
+    };
   });
 
-  const indicatorLeft = animationProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0%', '50%'],
+  const indicatorAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ translateX: (indicatorTrackWidth / 2) * animationProgress.value }],
+      backgroundColor: interpolateColor(
+        animationProgress.value,
+        [0, 1],
+        [Colors.primary, NutritionColors.primary]
+      ),
+    };
   });
 
-  const indicatorColor = animationProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [Colors.primary, NutritionColors.primary],
-  });
+  const handleIndicatorTrackLayout = (event: any) => {
+    setIndicatorTrackWidth(event.nativeEvent.layout.width);
+  };
 
   return (
     <Animated.View
       style={[
         styles.container,
-        { backgroundColor, paddingTop: insets.top + 4 },
+        containerAnimatedStyle,
+        { paddingTop: insets.top + 4 },
       ]}
     >
       <View style={styles.tabs}>
@@ -37,6 +50,10 @@ export default function TopNavigationRibbon() {
           style={styles.tab}
           onPress={() => setMode('fitness')}
           activeOpacity={0.7}
+          accessible
+          accessibilityRole="tab"
+          accessibilityLabel="Fitness mode"
+          accessibilityState={{ selected: mode === 'fitness' }}
         >
           <Dumbbell
             size={18}
@@ -56,6 +73,10 @@ export default function TopNavigationRibbon() {
           style={styles.tab}
           onPress={() => setMode('nutrition')}
           activeOpacity={0.7}
+          accessible
+          accessibilityRole="tab"
+          accessibilityLabel="Nutrition mode"
+          accessibilityState={{ selected: mode === 'nutrition' }}
         >
           <Apple
             size={18}
@@ -80,20 +101,19 @@ export default function TopNavigationRibbon() {
       </View>
 
       {/* Animated indicator */}
-      <View style={styles.indicatorTrack}>
+      <View style={styles.indicatorTrack} onLayout={handleIndicatorTrackLayout}>
         <Animated.View
           style={[
             styles.indicator,
-            {
-              left: indicatorLeft,
-              backgroundColor: indicatorColor,
-            },
+            indicatorAnimatedStyle,
           ]}
         />
       </View>
     </Animated.View>
   );
 }
+
+export default React.memo(TopNavigationRibbon);
 
 const styles = StyleSheet.create({
   container: {

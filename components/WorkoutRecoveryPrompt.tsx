@@ -4,7 +4,7 @@ import { AlertTriangle, RotateCcw, Trash2 } from 'lucide-react-native';
 import { useWorkout } from '@/contexts/WorkoutContext';
 import Colors from '@/constants/colors';
 
-export default function WorkoutRecoveryPrompt() {
+function WorkoutRecoveryPrompt() {
   const { hasRecoverableSession, recoverSession, discardRecoverableSession } =
     useWorkout();
 
@@ -27,6 +27,9 @@ export default function WorkoutRecoveryPrompt() {
           style={styles.resumeButton}
           onPress={recoverSession}
           activeOpacity={0.7}
+          accessible
+          accessibilityRole="button"
+          accessibilityLabel="Resume unfinished workout"
         >
           <RotateCcw size={16} color="#fff" />
           <Text style={styles.resumeText}>Resume</Text>
@@ -36,6 +39,9 @@ export default function WorkoutRecoveryPrompt() {
           style={styles.discardButton}
           onPress={discardRecoverableSession}
           activeOpacity={0.7}
+          accessible
+          accessibilityRole="button"
+          accessibilityLabel="Discard unfinished workout"
         >
           <Trash2 size={16} color={Colors.error} />
           <Text style={styles.discardText}>Discard</Text>
@@ -44,6 +50,8 @@ export default function WorkoutRecoveryPrompt() {
     </View>
   );
 }
+
+export default React.memo(WorkoutRecoveryPrompt);
 
 const styles = StyleSheet.create({
   container: {

@@ -1,14 +1,11 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { Dumbbell, BarChart3, Settings, BookOpen } from 'lucide-react-native';
-import { useAppMode } from '@/contexts/AppModeContext';
 import Colors from '@/constants/colors';
 import TopNavigationRibbon from '@/components/TopNavigationRibbon';
 import { View } from 'react-native';
 
 export default function TabsLayout() {
-  const { mode } = useAppMode();
-
   // When in nutrition mode, this tab navigator shouldn't be visible
   // The root layout handles switching between (tabs) and (nutrition)
 

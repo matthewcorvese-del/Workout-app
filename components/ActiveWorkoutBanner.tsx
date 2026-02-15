@@ -5,7 +5,7 @@ import { useWorkout } from '@/contexts/WorkoutContext';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 
-export default function ActiveWorkoutBanner() {
+function ActiveWorkoutBanner() {
   const { activeSession } = useWorkout();
   const router = useRouter();
 
@@ -28,6 +28,10 @@ export default function ActiveWorkoutBanner() {
       style={styles.container}
       onPress={() => router.push('/active-workout')}
       activeOpacity={0.8}
+      accessible
+      accessibilityRole="button"
+      accessibilityLabel="Resume active workout"
+      accessibilityHint="Opens the in-progress workout screen"
     >
       <View style={styles.left}>
         <Play size={16} color="#fff" fill="#fff" />
@@ -50,6 +54,8 @@ export default function ActiveWorkoutBanner() {
     </TouchableOpacity>
   );
 }
+
+export default React.memo(ActiveWorkoutBanner);
 
 const styles = StyleSheet.create({
   container: {

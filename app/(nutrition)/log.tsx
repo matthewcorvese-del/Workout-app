@@ -11,7 +11,7 @@ import {
   Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Search, Plus, X, Barcode } from 'lucide-react-native';
+import { Search, Plus, X } from 'lucide-react-native';
 import { useNutrition } from '@/contexts/NutritionContext';
 import NutritionColors from '@/constants/nutritionColors';
 import { FoodSearchResult, MealType, FoodItem } from '@/types/nutrition';
@@ -24,7 +24,7 @@ const mealOptions: { type: MealType; label: string; color: string }[] = [
 ];
 
 export default function LogScreen() {
-  const { searchFoods, searchByBarcode, addFoodLog, todayLogs, deleteFoodLog } =
+  const { searchFoods, addFoodLog, todayLogs, deleteFoodLog } =
     useNutrition();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<FoodSearchResult[]>([]);
@@ -191,7 +191,7 @@ export default function LogScreen() {
           ListHeaderComponent={
             todayLogs.length > 0 ? (
               <Text style={styles.listHeader}>
-                Today's Log ({todayLogs.length})
+                Today&apos;s Log ({todayLogs.length})
               </Text>
             ) : null
           }

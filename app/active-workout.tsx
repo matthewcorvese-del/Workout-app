@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   Modal,
   FlatList,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   X,
   Plus,
@@ -23,12 +23,14 @@ import {
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useWorkout } from '@/contexts/WorkoutContext';
+import { useSettings } from '@/contexts/SettingsContext';
 import Colors from '@/constants/colors';
 import allExercises, { searchExercises } from '@/data/exercises';
-import { WorkoutSet } from '@/types/workout';
 
 export default function ActiveWorkoutScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { settings } = useSettings();
   const {
     activeSession,
     endWorkout,
@@ -127,9 +129,16 @@ export default function ActiveWorkoutScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
       {/* Header */}
-      <View style={styles.header}>
+      <View
+        style={[
+          styles.header,
+          {
+            paddingTop: insets.top + 8,
+          },
+        ]}
+      >
         <TouchableOpacity onPress={handleCancel}>
           <X size={24} color={Colors.error} />
         </TouchableOpacity>
@@ -144,10 +153,15 @@ export default function ActiveWorkoutScreen() {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.finishBtn} onPress={handleFinish}>
-          <Check size={18} color="#fff" />
-          <Text style={styles.finishBtnText}>Finish</Text>
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <Text style={styles.headerVolumeText}>
+            Vol {activeSession.totalVolume.toLocaleString()} {settings.weightUnit}
+          </Text>
+          <TouchableOpacity style={styles.finishBtn} onPress={handleFinish}>
+            <Check size={18} color="#fff" />
+            <Text style={styles.finishBtnText}>Finish</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Exercise List */}
@@ -194,8 +208,8 @@ export default function ActiveWorkoutScreen() {
                     <Text style={[styles.setHeaderText, { width: 36 }]}>
                       Set
                     </Text>
-                    <Text style={[styles.setHeaderText, { flex: 1 }]}>
-                      Weight
+                    <Text style={[styles.setHeaderText, { flex: 1 }]}> 
+                      Weight ({settings.weightUnit})
                     </Text>
                     <Text style={[styles.setHeaderText, { flex: 1 }]}>
                       Reps
@@ -282,14 +296,6 @@ export default function ActiveWorkoutScreen() {
           <Text style={styles.addExerciseText}>Add Exercise</Text>
         </TouchableOpacity>
 
-        {/* Volume Summary */}
-        <View style={styles.volumeCard}>
-          <Text style={styles.volumeLabel}>Total Volume</Text>
-          <Text style={styles.volumeValue}>
-            {activeSession.totalVolume.toLocaleString()} lbs
-          </Text>
-        </View>
-
         <View style={{ height: 60 }} />
       </ScrollView>
 
@@ -300,7 +306,14 @@ export default function ActiveWorkoutScreen() {
         presentationStyle="pageSheet"
       >
         <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
+          <View
+            style={[
+              styles.modalHeader,
+              {
+                paddingTop: insets.top + 10,
+              },
+            ]}
+          >
             <TouchableOpacity onPress={() => setShowAddExercise(false)}>
               <X size={24} color={Colors.text} />
             </TouchableOpacity>
@@ -356,7 +369,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
@@ -379,6 +392,15 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
+  },
+  headerRight: {
+    alignItems: 'flex-end',
+    gap: 6,
+  },
+  headerVolumeText: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    fontWeight: '600',
   },
   finishBtn: {
     flexDirection: 'row',
@@ -521,24 +543,6 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontWeight: '600',
   },
-  volumeCard: {
-    backgroundColor: Colors.card,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.cardBorder,
-  },
-  volumeLabel: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    marginBottom: 4,
-  },
-  volumeValue: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: Colors.text,
-  },
   emptyState: {
     flex: 1,
     alignItems: 'center',
@@ -570,7 +574,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },

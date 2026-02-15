@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -6,29 +6,38 @@ import {
   TouchableOpacity,
   TextInput,
   StyleSheet,
-  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   User,
   Scale,
   Ruler,
-  Activity,
 } from 'lucide-react-native';
 import { useSettings } from '@/contexts/SettingsContext';
 import Colors from '@/constants/colors';
+import AppToggle from '@/components/AppToggle';
+import { useProfileMeasurementInputs } from '@/hooks/useProfileMeasurementInputs';
 
 export default function SettingsScreen() {
   const { settings, updateSettings, updateProfile } = useSettings();
-  const [editingField, setEditingField] = useState<string | null>(null);
-
-  const activityLevels = [
-    { value: 'sedentary', label: 'Sedentary' },
-    { value: 'light', label: 'Lightly Active' },
-    { value: 'moderate', label: 'Moderately Active' },
-    { value: 'active', label: 'Active' },
-    { value: 'very_active', label: 'Very Active' },
-  ];
+  const {
+    weightInput,
+    setWeightInput,
+    heightCmInput,
+    setHeightCmInput,
+    heightFtInput,
+    setHeightFtInput,
+    heightInInput,
+    setHeightInInput,
+    commitWeightInput,
+    commitMetricHeightInput,
+    commitImperialHeightInput,
+  } = useProfileMeasurementInputs({
+    profile: settings.profile,
+    weightUnit: settings.weightUnit,
+    heightUnit: settings.heightUnit,
+    updateProfile,
+  });
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right']}>
@@ -61,8 +70,16 @@ export default function SettingsScreen() {
             </View>
             <TextInput
               style={styles.rowInput}
-              value={String(settings.profile.age)}
-              onChangeText={(v) => updateProfile({ age: parseInt(v) || 0 })}
+              value={settings.profile.age ? String(settings.profile.age) : ''}
+              onChangeText={(v) => {
+                if (v.trim() === '') {
+                  updateProfile({ age: 0 });
+                  return;
+                }
+                const parsed = parseInt(v, 10);
+                if (Number.isNaN(parsed)) return;
+                updateProfile({ age: parsed });
+              }}
               keyboardType="numeric"
               placeholder="30"
               placeholderTextColor={Colors.textMuted}
@@ -104,18 +121,51 @@ export default function SettingsScreen() {
           <View style={styles.row}>
             <View style={styles.rowLeft}>
               <Ruler size={18} color={Colors.primary} />
-              <Text style={styles.rowLabel}>Height (cm)</Text>
+              <Text style={styles.rowLabel}>
+                Height ({settings.heightUnit === 'imperial' ? `ft/in` : 'cm'})
+              </Text>
             </View>
-            <TextInput
-              style={styles.rowInput}
-              value={String(settings.profile.heightCm)}
-              onChangeText={(v) =>
-                updateProfile({ heightCm: parseInt(v) || 0 })
-              }
-              keyboardType="numeric"
-              placeholder="175"
-              placeholderTextColor={Colors.textMuted}
-            />
+            {settings.heightUnit === 'imperial' ? (
+              <View style={styles.heightImperialInputs}>
+                <View style={styles.heightPart}>
+                  <TextInput
+                    style={styles.heightInput}
+                    value={heightFtInput}
+                    onChangeText={setHeightFtInput}
+                    onBlur={commitImperialHeightInput}
+                    onEndEditing={commitImperialHeightInput}
+                    keyboardType="numeric"
+                    placeholder="5"
+                    placeholderTextColor={Colors.textMuted}
+                  />
+                  <Text style={styles.heightUnitText}>ft</Text>
+                </View>
+                <View style={styles.heightPart}>
+                  <TextInput
+                    style={styles.heightInput}
+                    value={heightInInput}
+                    onChangeText={setHeightInInput}
+                    onBlur={commitImperialHeightInput}
+                    onEndEditing={commitImperialHeightInput}
+                    keyboardType="numeric"
+                    placeholder="9"
+                    placeholderTextColor={Colors.textMuted}
+                  />
+                  <Text style={styles.heightUnitText}>in</Text>
+                </View>
+              </View>
+            ) : (
+              <TextInput
+                style={styles.rowInput}
+                value={heightCmInput}
+                onChangeText={setHeightCmInput}
+                onBlur={commitMetricHeightInput}
+                onEndEditing={commitMetricHeightInput}
+                keyboardType="numeric"
+                placeholder="175"
+                placeholderTextColor={Colors.textMuted}
+              />
+            )}
           </View>
 
           <View style={styles.divider} />
@@ -123,14 +173,16 @@ export default function SettingsScreen() {
           <View style={styles.row}>
             <View style={styles.rowLeft}>
               <Scale size={18} color={Colors.primary} />
-              <Text style={styles.rowLabel}>Weight (kg)</Text>
+              <Text style={styles.rowLabel}>
+                Weight ({settings.weightUnit})
+              </Text>
             </View>
             <TextInput
               style={styles.rowInput}
-              value={String(settings.profile.weightKg)}
-              onChangeText={(v) =>
-                updateProfile({ weightKg: parseFloat(v) || 0 })
-              }
+              value={weightInput}
+              onChangeText={setWeightInput}
+              onBlur={commitWeightInput}
+              onEndEditing={commitWeightInput}
               keyboardType="decimal-pad"
               placeholder="75"
               placeholderTextColor={Colors.textMuted}
@@ -171,6 +223,41 @@ export default function SettingsScreen() {
           <View style={styles.divider} />
 
           <View style={styles.row}>
+            <Text style={styles.rowLabel}>Height Unit</Text>
+            <View style={styles.segmentControl}>
+              {[
+                { value: 'metric', label: 'Metric' },
+                { value: 'imperial', label: 'English' },
+              ].map((unit) => (
+                <TouchableOpacity
+                  key={unit.value}
+                  style={[
+                    styles.segment,
+                    settings.heightUnit === unit.value && styles.segmentActive,
+                  ]}
+                  onPress={() =>
+                    updateSettings({
+                      heightUnit: unit.value as 'metric' | 'imperial',
+                    })
+                  }
+                >
+                  <Text
+                    style={[
+                      styles.segmentText,
+                      settings.heightUnit === unit.value &&
+                        styles.segmentTextActive,
+                    ]}
+                  >
+                    {unit.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.row}>
             <Text style={styles.rowLabel}>Default Rest Timer (sec)</Text>
             <TextInput
               style={styles.rowInput}
@@ -188,11 +275,14 @@ export default function SettingsScreen() {
 
           <View style={styles.row}>
             <Text style={styles.rowLabel}>Auto-Start Rest Timer</Text>
-            <Switch
+            <AppToggle
               value={settings.autoStartRestTimer}
               onValueChange={(v) => updateSettings({ autoStartRestTimer: v })}
-              trackColor={{ true: Colors.primary, false: Colors.border }}
-              thumbColor="#fff"
+              accessibilityLabel="Auto-start rest timer"
+              activeTrackColor={Colors.primary}
+              inactiveTrackColor={Colors.border}
+              activeThumbColor="#fff"
+              inactiveThumbColor="#fff"
             />
           </View>
         </View>
@@ -281,6 +371,28 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     minWidth: 60,
     padding: 4,
+  },
+  heightImperialInputs: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  heightPart: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  heightInput: {
+    fontSize: 15,
+    color: Colors.text,
+    textAlign: 'right',
+    width: 36,
+    padding: 4,
+  },
+  heightUnitText: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    fontWeight: '500',
   },
   divider: {
     height: 1,

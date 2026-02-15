@@ -8,22 +8,19 @@ import {
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Search, Filter, ChevronRight } from 'lucide-react-native';
+import { Search, ChevronRight } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import allExercises, {
   searchExercises,
   getAllMuscleGroups,
-  getAllCategories,
 } from '@/data/exercises';
 import { Exercise } from '@/types/workout';
 
 const muscleGroups = getAllMuscleGroups();
-const categories = getAllCategories();
 
 export default function LibraryScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMuscle, setSelectedMuscle] = useState<string | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   const filteredExercises = useMemo(() => {
     let results = searchQuery
@@ -35,11 +32,8 @@ export default function LibraryScreen() {
         e.muscleGroups.includes(selectedMuscle as any)
       );
     }
-    if (selectedCategory) {
-      results = results.filter((e) => e.category === selectedCategory);
-    }
     return results;
-  }, [searchQuery, selectedMuscle, selectedCategory]);
+  }, [searchQuery, selectedMuscle]);
 
   const renderExercise = ({ item }: { item: Exercise }) => (
     <TouchableOpacity style={styles.exerciseCard} activeOpacity={0.7}>

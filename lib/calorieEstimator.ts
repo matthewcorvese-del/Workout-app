@@ -23,6 +23,7 @@ interface EstimatorState {
   history: DailyRecord[];
   bmr: number;
   lastReconciliation: string | null;
+  provisionalBias: number;
 }
 
 // ─── Calorie Estimator ───
@@ -32,6 +33,7 @@ export class OuraCalorieEstimator {
   private history: DailyRecord[];
   private bmr: number;
   private lastReconciliation: string | null;
+  private provisionalBias: number;
 
   constructor() {
     this.patterns = Array.from({ length: 7 }, (_, i) => ({
@@ -42,6 +44,26 @@ export class OuraCalorieEstimator {
     this.history = [];
     this.bmr = 1800; // Default BMR, will be updated from Oura sleep data
     this.lastReconciliation = null;
+    this.provisionalBias = 1;
+  }
+
+  private recomputePatternsFromHistory(): void {
+    this.patterns = Array.from({ length: 7 }, (_, i) => ({
+      dayOfWeek: i,
+      averageCalories: 0,
+      sampleCount: 0,
+    }));
+
+    for (const record of this.history) {
+      if (record.source !== 'oura') continue;
+      const dayOfWeek = new Date(record.date).getDay();
+      const pattern = this.patterns[dayOfWeek];
+      const nextCount = pattern.sampleCount + 1;
+      pattern.averageCalories =
+        (pattern.averageCalories * pattern.sampleCount + record.calories) /
+        nextCount;
+      pattern.sampleCount = nextCount;
+    }
   }
 
   // ─── Load / Save ───
@@ -55,6 +77,7 @@ export class OuraCalorieEstimator {
         this.history = state.history;
         this.bmr = state.bmr;
         this.lastReconciliation = state.lastReconciliation;
+        this.provisionalBias = state.provisionalBias ?? 1;
       }
     } catch (err) {
       console.warn('Failed to load calorie estimator state:', err);
@@ -68,6 +91,7 @@ export class OuraCalorieEstimator {
         history: this.history,
         bmr: this.bmr,
         lastReconciliation: this.lastReconciliation,
+        provisionalBias: this.provisionalBias,
       };
       await AsyncStorage.setItem(ESTIMATOR_STORAGE_KEY, JSON.stringify(state));
     } catch (err) {
@@ -124,13 +148,37 @@ export class OuraCalorieEstimator {
     const cutoffStr = cutoff.toISOString().split('T')[0];
     this.history = this.history.filter((r) => r.date >= cutoffStr);
 
-    // Update day-of-week pattern
-    const dayOfWeek = new Date(date).getDay();
-    const pattern = this.patterns[dayOfWeek];
-    const newCount = pattern.sampleCount + 1;
-    pattern.averageCalories =
-      (pattern.averageCalories * pattern.sampleCount + calories) / newCount;
-    pattern.sampleCount = newCount;
+    this.recomputePatternsFromHistory();
+
+    await this.save();
+  }
+
+  async recordEstimatedCalories(
+    date: string,
+    calories: number,
+    steps: number = 0,
+    activeMinutes: number = 0
+  ): Promise<void> {
+    const existingIndex = this.history.findIndex((r) => r.date === date);
+    const existing = existingIndex >= 0 ? this.history[existingIndex] : undefined;
+
+    if (existing?.source === 'oura') {
+      return;
+    }
+
+    const record: DailyRecord = {
+      date,
+      calories,
+      steps,
+      activeMinutes,
+      source: 'estimated',
+    };
+
+    if (existingIndex >= 0) {
+      this.history[existingIndex] = record;
+    } else {
+      this.history.push(record);
+    }
 
     await this.save();
   }
@@ -181,8 +229,23 @@ export class OuraCalorieEstimator {
    * and adjust future estimates.
    */
   async reconcile(date: string, actualCalories: number): Promise<number> {
-    const estimated = this.estimateCalories(date);
+    const existing = this.history.find((r) => r.date === date);
+
+    if (existing?.source === 'oura') {
+      return 0;
+    }
+
+    const historicalEstimate =
+      existing?.source === 'estimated' ? existing.calories : undefined;
+    const estimated = historicalEstimate ?? this.estimateCalories(date);
     const difference = actualCalories - estimated;
+
+    if (estimated > 0) {
+      const ratio = actualCalories / estimated;
+      const boundedRatio = Math.max(0.75, Math.min(1.25, ratio));
+      this.provisionalBias =
+        this.provisionalBias * 0.85 + boundedRatio * 0.15;
+    }
 
     // Record actual
     await this.recordActualCalories(date, actualCalories);
@@ -208,6 +271,14 @@ export class OuraCalorieEstimator {
 
   getLastReconciliation(): string | null {
     return this.lastReconciliation;
+  }
+
+  getProvisionalBias(): number {
+    return this.provisionalBias;
+  }
+
+  applyProvisionalBias(calories: number): number {
+    return Math.round(calories * this.provisionalBias);
   }
 
   /**

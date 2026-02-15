@@ -11,7 +11,7 @@ export default function NotFoundScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>Page Not Found</Text>
       <Text style={styles.subtitle}>
-        The page you're looking for doesn't exist.
+        The page you&apos;re looking for doesn&apos;t exist.
       </Text>
       <TouchableOpacity
         style={styles.button}
