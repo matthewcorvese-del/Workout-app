@@ -49,6 +49,12 @@ export default function ProgressScreen() {
       .sort((a, b) => (b.completedAt! > a.completedAt! ? 1 : -1));
   }, [sessions, timeFilter]);
 
+  const displayPRs = useMemo(() => {
+    return personalRecords
+      .filter((record) => record.type === 'max_weight' || record.type === 'max_volume')
+      .slice(0, 5);
+  }, [personalRecords]);
+
   const formatDuration = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
@@ -136,14 +142,14 @@ export default function ProgressScreen() {
       </View>
 
       {/* PRs Section */}
-      {personalRecords.length > 0 && (
+      {displayPRs.length > 0 && (
         <View style={styles.prSection}>
           <View style={styles.sectionHeader}>
             <Award size={18} color={Colors.prIndicator} />
             <Text style={styles.sectionTitle}>Personal Records</Text>
           </View>
           <FlatList
-            data={personalRecords.slice(0, 5)}
+            data={displayPRs}
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.prList}
@@ -154,11 +160,11 @@ export default function ProgressScreen() {
                   {item.exerciseName}
                 </Text>
                 <Text style={styles.prValue}>
-                  {item.value}{' '}
-                  {item.unit === 'lbs' ? settings.weightUnit : item.unit}
+                  {item.value}
+                  {item.type === 'max_weight' ? ` ${settings.weightUnit}` : ''}
                 </Text>
                 <Text style={styles.prType}>
-                  {item.type.replace(/_/g, ' ')}
+                  {item.type === 'max_weight' ? 'Max Weight' : 'Max Set Volume'}
                 </Text>
               </View>
             )}

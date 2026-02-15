@@ -19,6 +19,7 @@ import {
   Zap,
   X,
 } from 'lucide-react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
 import { useWorkout } from '@/contexts/WorkoutContext';
 import { useAppMode } from '@/contexts/AppModeContext';
@@ -75,11 +76,18 @@ export default function WorkoutsScreen() {
   };
 
   const handleDeleteRoutine = (id: string) => {
-    Alert.alert('Delete Routine', 'Are you sure?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => deleteRoutine(id) },
-    ]);
+    deleteRoutine(id);
   };
+
+  const renderDeleteAction = (onDelete: () => void) => (
+    <TouchableOpacity
+      style={styles.swipeDeleteAction}
+      onPress={onDelete}
+      activeOpacity={0.8}
+    >
+      <Trash2 size={16} color="#fff" />
+    </TouchableOpacity>
+  );
 
   const resetRoutineForm = () => {
     setEditingRoutineId(null);
@@ -164,61 +172,64 @@ export default function WorkoutsScreen() {
     : exercises.slice(0, 30);
 
   const renderRoutine = ({ item }: { item: WorkoutRoutine }) => (
-    <TouchableOpacity
-      style={styles.routineCard}
-      onPress={() => handleStartRoutine(item.id)}
-      activeOpacity={0.7}
+    <Swipeable
+      overshootRight={false}
+      renderRightActions={() =>
+        renderDeleteAction(() => handleDeleteRoutine(item.id))
+      }
     >
-      <View style={styles.routineHeader}>
-        <View style={styles.routineInfo}>
-          <Text style={styles.routineName}>{item.name}</Text>
-          {item.description && (
-            <Text style={styles.routineDesc} numberOfLines={1}>
-              {item.description}
+      <TouchableOpacity
+        style={styles.routineCard}
+        onPress={() => handleStartRoutine(item.id)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.routineHeader}>
+          <View style={styles.routineInfo}>
+            <Text style={styles.routineName}>{item.name}</Text>
+            {item.description && (
+              <Text style={styles.routineDesc} numberOfLines={1}>
+                {item.description}
+              </Text>
+            )}
+            <Text style={styles.routineExercises}>
+              {item.exercises.length} exercises
+              {item.estimatedDuration
+                ? ` · ~${item.estimatedDuration} min`
+                : ''}
             </Text>
-          )}
-          <Text style={styles.routineExercises}>
-            {item.exercises.length} exercises
-            {item.estimatedDuration
-              ? ` · ~${item.estimatedDuration} min`
-              : ''}
-          </Text>
-        </View>
+          </View>
 
-        <View style={styles.routineActions}>
-          <TouchableOpacity
-            style={styles.editBtn}
-            onPress={() => handleEditRoutine(item)}
-          >
-            <Edit3 size={16} color={Colors.textSecondary} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.deleteBtn}
-            onPress={() => handleDeleteRoutine(item.id)}
-          >
-            <Trash2 size={16} color={Colors.error} />
-          </TouchableOpacity>
-          <View style={styles.playBtn}>
-            <Play size={18} color="#fff" fill="#fff" />
+          <View style={styles.routineActions}>
+            <View style={styles.playBtn}>
+              <Play size={18} color="#fff" fill="#fff" />
+            </View>
           </View>
         </View>
-      </View>
 
-      {item.exercises.length > 0 && (
-        <View style={styles.exercisePreview}>
-          {item.exercises.slice(0, 3).map((ex, i) => (
-            <Text key={i} style={styles.exercisePreviewText}>
-              {ex.exerciseName} · {ex.targetSets}×{ex.targetReps}
-            </Text>
-          ))}
-          {item.exercises.length > 3 && (
-            <Text style={styles.exercisePreviewMore}>
-              +{item.exercises.length - 3} more
-            </Text>
-          )}
-        </View>
-      )}
-    </TouchableOpacity>
+        {item.exercises.length > 0 && (
+          <View style={styles.exercisePreview}>
+            {item.exercises.slice(0, 3).map((ex, i) => (
+              <Text key={i} style={styles.exercisePreviewText}>
+                {ex.exerciseName} · {ex.targetSets}×{ex.targetReps}
+              </Text>
+            ))}
+            {item.exercises.length > 3 && (
+              <Text style={styles.exercisePreviewMore}>
+                +{item.exercises.length - 3} more
+              </Text>
+            )}
+          </View>
+        )}
+
+        <TouchableOpacity
+          style={styles.editCornerBtn}
+          onPress={() => handleEditRoutine(item)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Edit3 size={16} color={Colors.textSecondary} />
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Swipeable>
   );
 
   return (
@@ -387,9 +398,11 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.card,
     borderRadius: 12,
     padding: 16,
+    paddingBottom: 44,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: Colors.cardBorder,
+    position: 'relative',
   },
   routineHeader: {
     flexDirection: 'row',
@@ -422,7 +435,10 @@ const styles = StyleSheet.create({
   editBtn: {
     padding: 4,
   },
-  deleteBtn: {
+  editCornerBtn: {
+    position: 'absolute',
+    right: 14,
+    bottom: 12,
     padding: 4,
   },
   playBtn: {
@@ -430,6 +446,14 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  swipeDeleteAction: {
+    width: 72,
+    marginBottom: 12,
+    borderRadius: 12,
+    backgroundColor: Colors.error,
     alignItems: 'center',
     justifyContent: 'center',
   },

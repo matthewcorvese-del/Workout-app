@@ -8,13 +8,13 @@ import {
   PersonalRecord,
   WorkoutStats,
   ExerciseProgress,
-  PRType,
 } from '@/types/workout';
 
 const ROUTINES_KEY = 'workout_routines';
 const SESSIONS_KEY = 'workout_sessions';
 const ACTIVE_SESSION_KEY = 'active_workout_session';
 const PRS_KEY = 'personal_records';
+const ALLOWED_PR_TYPES = new Set(['max_weight', 'max_volume']);
 
 // ─── Types ───
 
@@ -71,11 +71,58 @@ function calculateVolume(exercises: WorkoutExercise[]): number {
   }, 0);
 }
 
-function estimateOneRM(weight: number, reps: number): number {
-  if (reps === 1) return weight;
-  if (reps === 0 || weight === 0) return 0;
-  // Brzycki formula
-  return Math.round(weight * (36 / (37 - reps)));
+function getLatestCompletedSetsForExercise(
+  sessions: WorkoutSession[],
+  exerciseId: string
+): WorkoutSet[] {
+  const latestSession = [...sessions]
+    .filter((s) => Boolean(s.completedAt))
+    .sort((a, b) =>
+      new Date(b.completedAt || 0).getTime() - new Date(a.completedAt || 0).getTime()
+    )
+    .find((s) => s.exercises.some((e) => e.exerciseId === exerciseId));
+
+  if (!latestSession) return [];
+
+  const exercise = latestSession.exercises.find((e) => e.exerciseId === exerciseId);
+  if (!exercise) return [];
+
+  return exercise.sets
+    .filter((set) => Boolean(set.completedAt))
+    .map((set, index) => ({
+      ...set,
+      id: generateId(),
+      setNumber: index + 1,
+      completedAt: undefined,
+    }));
+}
+
+function getExerciseBestMetricsFromSessions(
+  sessions: WorkoutSession[],
+  exerciseId: string
+) {
+  const completedSets = sessions
+    .filter((s) => Boolean(s.completedAt))
+    .flatMap((s) => s.exercises)
+    .filter((ex) => ex.exerciseId === exerciseId)
+    .flatMap((ex) => ex.sets)
+    .filter((set) => Boolean(set.completedAt) && !set.isWarmup && set.reps > 0);
+
+  if (completedSets.length === 0) {
+    return {
+      maxWeight: 0,
+      maxVolume: 0,
+      count: 0,
+    };
+  }
+
+  const maxVolume = Math.max(...completedSets.map((set) => set.weight * set.reps));
+
+  return {
+    maxWeight: Math.max(...completedSets.map((set) => set.weight)),
+    maxVolume,
+    count: completedSets.length,
+  };
 }
 
 // ─── Provider ───
@@ -104,7 +151,16 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
         try { setSessions(JSON.parse(sessionsRaw)); } catch {}
       }
       if (prsRaw) {
-        try { setPersonalRecords(JSON.parse(prsRaw)); } catch {}
+        try {
+          const parsed = JSON.parse(prsRaw) as PersonalRecord[];
+          const filtered = parsed.filter((record) =>
+            ALLOWED_PR_TYPES.has(record.type)
+          );
+          setPersonalRecords(filtered);
+          if (filtered.length !== parsed.length) {
+            AsyncStorage.setItem(PRS_KEY, JSON.stringify(filtered));
+          }
+        } catch {}
       }
       // Check for recoverable (crashed) session
       if (activeRaw) {
@@ -200,7 +256,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
               id: generateId(),
               exerciseId: re.exerciseId,
               exerciseName: re.exerciseName,
-              sets: [],
+              sets: getLatestCompletedSetsForExercise(sessions, re.exerciseId),
               order: re.order,
               notes: re.notes,
             }))
@@ -213,7 +269,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       persistActiveSession(session);
       return session;
     },
-    [routines, persistActiveSession]
+    [routines, sessions, persistActiveSession]
   );
 
   const updateActiveSession = useCallback(
@@ -236,15 +292,26 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       const newPRs: PersonalRecord[] = [];
 
       session.exercises.forEach((ex) => {
-        const workingSets = ex.sets.filter((s) => !s.isWarmup && s.reps > 0);
+        const workingSets = ex.sets.filter(
+          (s) => Boolean(s.completedAt) && !s.isWarmup && s.reps > 0
+        );
         if (workingSets.length === 0) return;
+
+        const priorSessions = sessions.filter(
+          (s) =>
+            s.id !== session.id &&
+            Boolean(s.completedAt) &&
+            s.exercises.some((e) => e.exerciseId === ex.exerciseId)
+        );
+
+        // First completed workout for an exercise establishes baseline and does not trigger PRs
+        if (priorSessions.length === 0) return;
+
+        const priorMetrics = getExerciseBestMetricsFromSessions(priorSessions, ex.exerciseId);
 
         // Max weight
         const maxWeight = Math.max(...workingSets.map((s) => s.weight));
-        const existingMaxWeight = personalRecords.find(
-          (pr) => pr.exerciseId === ex.exerciseId && pr.type === 'max_weight'
-        );
-        if (!existingMaxWeight || maxWeight > existingMaxWeight.value) {
+        if (maxWeight > priorMetrics.maxWeight) {
           newPRs.push({
             id: generateId(),
             exerciseId: ex.exerciseId,
@@ -254,47 +321,23 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
             unit: 'lbs',
             achievedAt: new Date().toISOString(),
             sessionId: session.id,
-            previousValue: existingMaxWeight?.value,
+            previousValue: priorMetrics.maxWeight,
           });
         }
 
-        // Max reps (at any weight)
-        const maxReps = Math.max(...workingSets.map((s) => s.reps));
-        const existingMaxReps = personalRecords.find(
-          (pr) => pr.exerciseId === ex.exerciseId && pr.type === 'max_reps'
-        );
-        if (!existingMaxReps || maxReps > existingMaxReps.value) {
+        // Max volume (per-set volume = weight × reps)
+        const maxSetVolume = Math.max(...workingSets.map((set) => set.weight * set.reps));
+        if (maxSetVolume > priorMetrics.maxVolume) {
           newPRs.push({
             id: generateId(),
             exerciseId: ex.exerciseId,
             exerciseName: ex.exerciseName,
-            type: 'max_reps',
-            value: maxReps,
-            unit: 'reps',
+            type: 'max_volume',
+            value: maxSetVolume,
+            unit: 'volume',
             achievedAt: new Date().toISOString(),
             sessionId: session.id,
-            previousValue: existingMaxReps?.value,
-          });
-        }
-
-        // Estimated 1RM
-        const bestOneRM = Math.max(
-          ...workingSets.map((s) => estimateOneRM(s.weight, s.reps))
-        );
-        const existingOneRM = personalRecords.find(
-          (pr) => pr.exerciseId === ex.exerciseId && pr.type === 'max_one_rm'
-        );
-        if (bestOneRM > 0 && (!existingOneRM || bestOneRM > existingOneRM.value)) {
-          newPRs.push({
-            id: generateId(),
-            exerciseId: ex.exerciseId,
-            exerciseName: ex.exerciseName,
-            type: 'max_one_rm',
-            value: bestOneRM,
-            unit: 'lbs',
-            achievedAt: new Date().toISOString(),
-            sessionId: session.id,
-            previousValue: existingOneRM?.value,
+            previousValue: priorMetrics.maxVolume,
           });
         }
       });
@@ -318,7 +361,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
         });
       }
     },
-    [personalRecords, persistPRs]
+    [sessions, persistPRs]
   );
 
   const endWorkout = useCallback(
@@ -366,13 +409,13 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
             id: generateId(),
             exerciseId,
             exerciseName,
-            sets: [],
+            sets: getLatestCompletedSetsForExercise(sessions, exerciseId),
             order: session.exercises.length,
           },
         ],
       }));
     },
-    [updateActiveSession]
+    [sessions, updateActiveSession]
   );
 
   const removeExerciseFromSession = useCallback(
@@ -395,7 +438,6 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
             ...set,
             id: generateId(),
             setNumber: ex.sets.length + 1,
-            completedAt: new Date().toISOString(),
           };
           return { ...ex, sets: [...ex.sets, newSet] };
         }),

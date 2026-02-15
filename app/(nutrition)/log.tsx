@@ -11,7 +11,8 @@ import {
   Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Search, Plus, X } from 'lucide-react-native';
+import { Search, Plus, X, Trash2 } from 'lucide-react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 import { useNutrition } from '@/contexts/NutritionContext';
 import NutritionColors from '@/constants/nutritionColors';
 import { FoodSearchResult, MealType, FoodItem } from '@/types/nutrition';
@@ -85,11 +86,18 @@ export default function LogScreen() {
   };
 
   const handleDeleteLog = (id: string) => {
-    Alert.alert('Delete Entry', 'Remove this food log?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => deleteFoodLog(id) },
-    ]);
+    deleteFoodLog(id);
   };
+
+  const renderDeleteAction = (onDelete: () => void) => (
+    <TouchableOpacity
+      style={styles.swipeDeleteAction}
+      onPress={onDelete}
+      activeOpacity={0.8}
+    >
+      <Trash2 size={14} color="#fff" />
+    </TouchableOpacity>
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right']}>
@@ -205,32 +213,35 @@ export default function LogScreen() {
             </View>
           }
           renderItem={({ item }) => (
-            <TouchableOpacity
-              style={styles.logCard}
-              onLongPress={() => handleDeleteLog(item.id)}
-              activeOpacity={0.8}
+            <Swipeable
+              overshootRight={false}
+              renderRightActions={() =>
+                renderDeleteAction(() => handleDeleteLog(item.id))
+              }
             >
-              <View
-                style={[
-                  styles.mealIndicator,
-                  {
-                    backgroundColor:
-                      mealOptions.find((m) => m.type === item.mealType)
-                        ?.color || NutritionColors.primary,
-                  },
-                ]}
-              />
-              <View style={styles.logInfo}>
-                <Text style={styles.logName} numberOfLines={1}>
-                  {item.foodItem.name}
-                </Text>
-                <Text style={styles.logMeta}>
-                  {item.servings} serving{item.servings !== 1 ? 's' : ''} ·{' '}
-                  {item.mealType}
-                </Text>
-              </View>
-              <Text style={styles.logCalories}>{item.calories} cal</Text>
-            </TouchableOpacity>
+              <TouchableOpacity style={styles.logCard} activeOpacity={0.8}>
+                <View
+                  style={[
+                    styles.mealIndicator,
+                    {
+                      backgroundColor:
+                        mealOptions.find((m) => m.type === item.mealType)
+                          ?.color || NutritionColors.primary,
+                    },
+                  ]}
+                />
+                <View style={styles.logInfo}>
+                  <Text style={styles.logName} numberOfLines={1}>
+                    {item.foodItem.name}
+                  </Text>
+                  <Text style={styles.logMeta}>
+                    {item.servings} serving{item.servings !== 1 ? 's' : ''} ·{' '}
+                    {item.mealType}
+                  </Text>
+                </View>
+                <Text style={styles.logCalories}>{item.calories} cal</Text>
+              </TouchableOpacity>
+            </Swipeable>
           )}
         />
       )}
@@ -439,6 +450,14 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     borderWidth: 1,
     borderColor: NutritionColors.cardBorder,
+  },
+  swipeDeleteAction: {
+    width: 64,
+    marginBottom: 6,
+    borderRadius: 10,
+    backgroundColor: NutritionColors.error,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   mealIndicator: {
     width: 4,

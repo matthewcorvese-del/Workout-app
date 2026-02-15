@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Search, Plus, ChefHat, Trash2, ChevronRight } from 'lucide-react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 import { useNutrition } from '@/contexts/NutritionContext';
 import NutritionColors from '@/constants/nutritionColors';
 import { Recipe, MealType } from '@/types/nutrition';
@@ -49,11 +50,18 @@ export default function RecipesScreen() {
   };
 
   const handleDelete = (id: string) => {
-    Alert.alert('Delete Recipe', 'Remove this recipe permanently?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => deleteRecipe(id) },
-    ]);
+    deleteRecipe(id);
   };
+
+  const renderDeleteAction = (onDelete: () => void) => (
+    <TouchableOpacity
+      style={styles.swipeDeleteAction}
+      onPress={onDelete}
+      activeOpacity={0.8}
+    >
+      <Trash2 size={14} color="#fff" />
+    </TouchableOpacity>
+  );
 
   const renderRecipe = ({ item }: { item: Recipe }) => {
     const perServing = {
@@ -64,53 +72,52 @@ export default function RecipesScreen() {
     };
 
     return (
-      <View style={styles.recipeCard}>
-        <TouchableOpacity
-          style={styles.recipeMain}
-          onPress={() => handleQuickLog(item)}
-          activeOpacity={0.7}
-        >
-          <View style={styles.recipeInfo}>
-            <Text style={styles.recipeName} numberOfLines={1}>
-              {item.name}
-            </Text>
-            <Text style={styles.recipeMeta}>
-              {item.ingredients.length} ingredients · {item.servings} serving
-              {item.servings !== 1 ? 's' : ''}
-            </Text>
-            <View style={styles.macroRow}>
-              <Text style={[styles.macroTag, { color: NutritionColors.caloriesColor }]}>
-                {perServing.calories} cal
-              </Text>
-              <Text style={[styles.macroTag, { color: NutritionColors.proteinColor }]}>
-                P:{perServing.protein}g
-              </Text>
-              <Text style={[styles.macroTag, { color: NutritionColors.carbsColor }]}>
-                C:{perServing.carbs}g
-              </Text>
-              <Text style={[styles.macroTag, { color: NutritionColors.fatColor }]}>
-                F:{perServing.fat}g
-              </Text>
-            </View>
-          </View>
-          <ChevronRight size={18} color={NutritionColors.textMuted} />
-        </TouchableOpacity>
-        <View style={styles.recipeActions}>
+      <Swipeable
+        overshootRight={false}
+        renderRightActions={() => renderDeleteAction(() => handleDelete(item.id))}
+      >
+        <View style={styles.recipeCard}>
           <TouchableOpacity
-            style={styles.quickLogBtn}
+            style={styles.recipeMain}
             onPress={() => handleQuickLog(item)}
+            activeOpacity={0.7}
           >
-            <Plus size={14} color="#fff" />
-            <Text style={styles.quickLogText}>Quick Log</Text>
+            <View style={styles.recipeInfo}>
+              <Text style={styles.recipeName} numberOfLines={1}>
+                {item.name}
+              </Text>
+              <Text style={styles.recipeMeta}>
+                {item.ingredients.length} ingredients · {item.servings} serving
+                {item.servings !== 1 ? 's' : ''}
+              </Text>
+              <View style={styles.macroRow}>
+                <Text style={[styles.macroTag, { color: NutritionColors.caloriesColor }]}> 
+                  {perServing.calories} cal
+                </Text>
+                <Text style={[styles.macroTag, { color: NutritionColors.proteinColor }]}> 
+                  P:{perServing.protein}g
+                </Text>
+                <Text style={[styles.macroTag, { color: NutritionColors.carbsColor }]}> 
+                  C:{perServing.carbs}g
+                </Text>
+                <Text style={[styles.macroTag, { color: NutritionColors.fatColor }]}> 
+                  F:{perServing.fat}g
+                </Text>
+              </View>
+            </View>
+            <ChevronRight size={18} color={NutritionColors.textMuted} />
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.deleteBtn}
-            onPress={() => handleDelete(item.id)}
-          >
-            <Trash2 size={14} color={NutritionColors.error} />
-          </TouchableOpacity>
+          <View style={styles.recipeActions}>
+            <TouchableOpacity
+              style={styles.quickLogBtn}
+              onPress={() => handleQuickLog(item)}
+            >
+              <Plus size={14} color="#fff" />
+              <Text style={styles.quickLogText}>Quick Log</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      </Swipeable>
     );
   };
 
@@ -274,11 +281,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 13,
   },
-  deleteBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderLeftWidth: 1,
-    borderLeftColor: NutritionColors.cardBorder,
+  swipeDeleteAction: {
+    width: 72,
+    marginBottom: 10,
+    borderRadius: 12,
+    backgroundColor: NutritionColors.error,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   empty: {
     alignItems: 'center',

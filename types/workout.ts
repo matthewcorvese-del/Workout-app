@@ -142,10 +142,7 @@ export interface PersonalRecord {
 
 export type PRType =
   | 'max_weight'      // heaviest single rep
-  | 'max_volume'      // most total volume in one session for this exercise
-  | 'max_reps'        // most reps at any weight
-  | 'max_weight_reps' // heaviest weight × reps combo
-  | 'max_one_rm';     // estimated 1RM
+  | 'max_volume';     // most total volume in one session for this exercise
 
 // ─── Progress & Stats ───
 
