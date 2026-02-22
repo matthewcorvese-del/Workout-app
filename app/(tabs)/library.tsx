@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -6,34 +6,50 @@ import {
   FlatList,
   TouchableOpacity,
   StyleSheet,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Search, ChevronRight } from 'lucide-react-native';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import Colors from '@/constants/colors';
-import allExercises, {
-  searchExercises,
-  getAllMuscleGroups,
-} from '@/data/exercises';
+import { fetchExerciseDbExercisePage, fetchExerciseDbMuscles } from '@/lib/exerciseDb';
 import { Exercise } from '@/types/workout';
-
-const muscleGroups = getAllMuscleGroups();
 
 export default function LibraryScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMuscle, setSelectedMuscle] = useState<string | null>(null);
 
-  const filteredExercises = useMemo(() => {
-    let results = searchQuery
-      ? searchExercises(searchQuery)
-      : allExercises;
+  const {
+    data: muscleGroups = [],
+    isLoading: isMuscleGroupsLoading,
+  } = useQuery({
+    queryKey: ['exercise-db-muscles'],
+    queryFn: fetchExerciseDbMuscles,
+    staleTime: 10 * 60 * 1000,
+  });
 
-    if (selectedMuscle) {
-      results = results.filter((e) =>
-        e.muscleGroups.includes(selectedMuscle as any)
-      );
-    }
-    return results;
-  }, [searchQuery, selectedMuscle]);
+  const {
+    data: pagedExercises,
+    isLoading: isExercisesLoading,
+    isError: isExercisesError,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+  } = useInfiniteQuery({
+    queryKey: ['exercise-db-library', searchQuery, selectedMuscle],
+    queryFn: ({ pageParam }) =>
+      fetchExerciseDbExercisePage({
+        search: searchQuery,
+        muscle: selectedMuscle,
+        limit: 25,
+        offset: pageParam,
+      }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => lastPage.nextOffset,
+    staleTime: 30 * 1000,
+  });
+
+  const filteredExercises = (pagedExercises?.pages ?? []).flatMap((page) => page.exercises);
 
   const renderExercise = ({ item }: { item: Exercise }) => (
     <TouchableOpacity style={styles.exerciseCard} activeOpacity={0.7}>
@@ -109,6 +125,33 @@ export default function LibraryScreen() {
         keyExtractor={(item) => item.id}
         renderItem={renderExercise}
         contentContainerStyle={styles.list}
+        onEndReachedThreshold={0.35}
+        onEndReached={() => {
+          if (hasNextPage && !isFetchingNextPage) {
+            fetchNextPage();
+          }
+        }}
+        ListFooterComponent={
+          isFetchingNextPage ? (
+            <View style={styles.listFooterLoading}>
+              <ActivityIndicator color={Colors.primary} />
+            </View>
+          ) : null
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            {(isExercisesLoading || isMuscleGroupsLoading) ? (
+              <>
+                <ActivityIndicator color={Colors.primary} />
+                <Text style={styles.emptyStateText}>Loading exercises...</Text>
+              </>
+            ) : (
+              <Text style={styles.emptyStateText}>
+                {isExercisesError ? 'Unable to load exercises' : 'No exercises found'}
+              </Text>
+            )}
+          </View>
+        }
       />
     </SafeAreaView>
   );
@@ -179,6 +222,20 @@ const styles = StyleSheet.create({
   list: {
     paddingHorizontal: 16,
     paddingBottom: 100,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    gap: 10,
+  },
+  emptyStateText: {
+    color: Colors.textSecondary,
+    fontSize: 14,
+  },
+  listFooterLoading: {
+    paddingVertical: 14,
+    alignItems: 'center',
   },
   exerciseCard: {
     flexDirection: 'row',

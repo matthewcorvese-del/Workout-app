@@ -31,7 +31,7 @@ interface WorkoutContextValue {
   startWorkout: (routineId?: string) => WorkoutSession;
   endWorkout: (notes?: string) => void;
   cancelWorkout: () => void;
-  addExerciseToSession: (exerciseId: string, exerciseName: string) => void;
+  addExerciseToSession: (exerciseId: string, exerciseName: string, gifUrl?: string) => void;
   removeExerciseFromSession: (exerciseId: string) => void;
   addSet: (workoutExerciseId: string, set: Omit<WorkoutSet, 'id' | 'setNumber'>) => void;
   updateSet: (workoutExerciseId: string, setId: string, update: Partial<WorkoutSet>) => void;
@@ -256,6 +256,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
               id: generateId(),
               exerciseId: re.exerciseId,
               exerciseName: re.exerciseName,
+              gifUrl: re.gifUrl,
               sets: getLatestCompletedSetsForExercise(sessions, re.exerciseId),
               order: re.order,
               notes: re.notes,
@@ -400,7 +401,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   // ─── Exercise / Set Operations ───
 
   const addExerciseToSession = useCallback(
-    (exerciseId: string, exerciseName: string) => {
+    (exerciseId: string, exerciseName: string, gifUrl?: string) => {
       updateActiveSession((session) => ({
         ...session,
         exercises: [
@@ -409,6 +410,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
             id: generateId(),
             exerciseId,
             exerciseName,
+            gifUrl,
             sets: getLatestCompletedSetsForExercise(sessions, exerciseId),
             order: session.exercises.length,
           },

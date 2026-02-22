@@ -10,6 +10,8 @@ import {
   Modal,
   FlatList,
   Animated,
+  ActivityIndicator,
+  Image,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -25,12 +27,43 @@ import {
 } from 'lucide-react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { createAudioPlayer, AudioPlayer } from 'expo-audio';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useWorkout } from '@/contexts/WorkoutContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import Colors from '@/constants/colors';
-import allExercises, { searchExercises } from '@/data/exercises';
+import ExerciseInfoButton from '@/components/ExerciseInfoButton';
+import { fetchExerciseDbExerciseById, fetchExerciseDbExercisePage } from '@/lib/exerciseDb';
 import { WorkoutExercise, WorkoutSet } from '@/types/workout';
+
+function ExerciseHeaderThumb({
+  exerciseId,
+  gifUrl,
+}: {
+  exerciseId: string;
+  gifUrl?: string;
+}) {
+  const { data } = useQuery({
+    queryKey: ['exercise-db-thumb', exerciseId],
+    queryFn: () => fetchExerciseDbExerciseById(exerciseId),
+    enabled: !gifUrl,
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const resolvedGifUrl = gifUrl || data?.gifUrl;
+
+  if (!resolvedGifUrl) {
+    return <View style={styles.exerciseThumbPlaceholder} />;
+  }
+
+  return (
+    <Image
+      source={{ uri: resolvedGifUrl }}
+      style={styles.exerciseThumb}
+      resizeMode="contain"
+    />
+  );
+}
 
 export default function ActiveWorkoutScreen() {
   const router = useRouter();
@@ -324,8 +357,8 @@ export default function ActiveWorkoutScreen() {
     });
   };
 
-  const handleAddExercise = (exerciseId: string, exerciseName: string) => {
-    addExerciseToSession(exerciseId, exerciseName);
+  const handleAddExercise = (exerciseId: string, exerciseName: string, gifUrl?: string) => {
+    addExerciseToSession(exerciseId, exerciseName, gifUrl);
     setShowAddExercise(false);
     setExerciseSearch('');
   };
@@ -350,9 +383,27 @@ export default function ActiveWorkoutScreen() {
     </TouchableOpacity>
   );
 
-  const filteredExercises = exerciseSearch
-    ? searchExercises(exerciseSearch)
-    : allExercises.slice(0, 30);
+  const {
+    data: pagedExercises,
+    isLoading: isExerciseListLoading,
+    isError: isExerciseListError,
+    isFetchingNextPage: isExerciseListFetchingNextPage,
+    hasNextPage: hasMoreExercises,
+    fetchNextPage: fetchMoreExercises,
+  } = useInfiniteQuery({
+    queryKey: ['exercise-db-active-workout', exerciseSearch],
+    queryFn: ({ pageParam }) =>
+      fetchExerciseDbExercisePage({
+        search: exerciseSearch,
+        limit: 25,
+        offset: pageParam,
+      }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => lastPage.nextOffset,
+    staleTime: 30 * 1000,
+  });
+
+  const filteredExercises = (pagedExercises?.pages ?? []).flatMap((page) => page.exercises);
 
   if (!activeSession) {
     return (
@@ -471,14 +522,25 @@ export default function ActiveWorkoutScreen() {
                   activeOpacity={0.7}
                 >
                   <View style={styles.exerciseHeaderLeft}>
-                    <Text style={styles.exerciseName}>
-                      {exercise.exerciseName}
-                    </Text>
+                    <View style={styles.exerciseNameRow}>
+                      <Text style={styles.exerciseName}>
+                        {exercise.exerciseName}
+                      </Text>
+                      <ExerciseInfoButton
+                        exerciseId={exercise.exerciseId}
+                        exerciseName={exercise.exerciseName}
+                        gifUrl={exercise.gifUrl}
+                      />
+                    </View>
                     <Text style={styles.exerciseSets}>
                       {exercise.sets.length} sets
                     </Text>
                   </View>
                   <View style={styles.exerciseHeaderRight}>
+                    <ExerciseHeaderThumb
+                      exerciseId={exercise.exerciseId}
+                      gifUrl={exercise.gifUrl}
+                    />
                     {isExpanded ? (
                       <ChevronUp size={18} color={Colors.textMuted} />
                     ) : (
@@ -659,14 +721,49 @@ export default function ActiveWorkoutScreen() {
             data={filteredExercises}
             keyExtractor={(item) => item.id}
             contentContainerStyle={{ padding: 16 }}
+            onEndReachedThreshold={0.35}
+            onEndReached={() => {
+              if (hasMoreExercises && !isExerciseListFetchingNextPage) {
+                fetchMoreExercises();
+              }
+            }}
+            ListFooterComponent={
+              isExerciseListFetchingNextPage ? (
+                <View style={styles.exerciseListFooterLoading}>
+                  <ActivityIndicator color={Colors.primary} />
+                </View>
+              ) : null
+            }
+            ListEmptyComponent={
+              isExerciseListLoading ? (
+                <View style={styles.exerciseListEmpty}>
+                  <ActivityIndicator color={Colors.primary} />
+                  <Text style={styles.exerciseListEmptyText}>Loading exercises...</Text>
+                </View>
+              ) : (
+                <View style={styles.exerciseListEmpty}>
+                  <Text style={styles.exerciseListEmptyText}>
+                    {isExerciseListError ? 'Unable to load exercises' : 'No exercises found'}
+                  </Text>
+                </View>
+              )
+            }
             renderItem={({ item }) => (
               <TouchableOpacity
                 style={styles.exerciseListItem}
-                onPress={() => handleAddExercise(item.id, item.name)}
+                onPress={() => handleAddExercise(item.id, item.name, item.gifUrl)}
                 activeOpacity={0.7}
               >
                 <View>
-                  <Text style={styles.exerciseListName}>{item.name}</Text>
+                  <View style={styles.exerciseListNameRow}>
+                    <Text style={styles.exerciseListName}>{item.name}</Text>
+                    <ExerciseInfoButton
+                      exerciseId={item.id}
+                      exerciseName={item.name}
+                      gifUrl={item.gifUrl}
+                      description={item.instructions}
+                    />
+                  </View>
                   <Text style={styles.exerciseListMeta}>
                     {item.muscleGroups.join(', ')} · {item.equipment}
                   </Text>
@@ -799,10 +896,16 @@ const styles = StyleSheet.create({
   exerciseHeaderLeft: {
     flex: 1,
   },
+  exerciseNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   exerciseName: {
     fontSize: 16,
     fontWeight: '700',
     color: Colors.text,
+    flexShrink: 1,
   },
   exerciseSets: {
     fontSize: 12,
@@ -813,6 +916,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  exerciseThumb: {
+    width: 60,
+    height: 60,
+    borderRadius: 6,
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+  },
+  exerciseThumbPlaceholder: {
+    width: 60,
+    height: 60,
+    borderRadius: 6,
+    backgroundColor: Colors.inputBackground,
+    borderWidth: 1,
+    borderColor: Colors.inputBorder,
   },
   swipeDeleteAction: {
     width: 72,
@@ -1010,9 +1129,28 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.text,
   },
+  exerciseListNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   exerciseListMeta: {
     fontSize: 12,
     color: Colors.textSecondary,
     marginTop: 2,
+  },
+  exerciseListEmpty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    gap: 10,
+  },
+  exerciseListEmptyText: {
+    color: Colors.textSecondary,
+    fontSize: 14,
+  },
+  exerciseListFooterLoading: {
+    paddingVertical: 14,
+    alignItems: 'center',
   },
 });

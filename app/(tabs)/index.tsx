@@ -9,6 +9,9 @@ import {
   Alert,
   Modal,
   ScrollView,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -20,14 +23,16 @@ import {
   X,
 } from 'lucide-react-native';
 import { Swipeable } from 'react-native-gesture-handler';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useWorkout } from '@/contexts/WorkoutContext';
 import { useAppMode } from '@/contexts/AppModeContext';
 import ActiveWorkoutBanner from '@/components/ActiveWorkoutBanner';
+import ExerciseInfoButton from '@/components/ExerciseInfoButton';
 import WorkoutRecoveryPrompt from '@/components/WorkoutRecoveryPrompt';
 import Colors from '@/constants/colors';
 import { WorkoutRoutine, WorkoutRoutineExercise } from '@/types/workout';
-import exercises from '@/data/exercises';
+import { fetchExerciseDbExercisePage } from '@/lib/exerciseDb';
 
 export default function WorkoutsScreen() {
   const router = useRouter();
@@ -146,7 +151,7 @@ export default function WorkoutsScreen() {
     handleCloseRoutineModal();
   };
 
-  const toggleExercise = (exerciseId: string, exerciseName: string) => {
+  const toggleExercise = (exerciseId: string, exerciseName: string, gifUrl?: string) => {
     setSelectedExercises((prev) => {
       const exists = prev.find((e) => e.exerciseId === exerciseId);
       if (exists) {
@@ -157,6 +162,7 @@ export default function WorkoutsScreen() {
         {
           exerciseId,
           exerciseName,
+          gifUrl,
           targetSets: 3,
           targetReps: 10,
           order: prev.length,
@@ -165,11 +171,27 @@ export default function WorkoutsScreen() {
     });
   };
 
-  const filteredExercises = searchQuery
-    ? exercises.filter((e) =>
-        e.name.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : exercises.slice(0, 30);
+  const {
+    data: pagedExercises,
+    isLoading: isExerciseListLoading,
+    isError: isExerciseListError,
+    isFetchingNextPage: isExerciseListFetchingNextPage,
+    hasNextPage: hasMoreExercises,
+    fetchNextPage: fetchMoreExercises,
+  } = useInfiniteQuery({
+    queryKey: ['exercise-db-routine-builder', searchQuery],
+    queryFn: ({ pageParam }) =>
+      fetchExerciseDbExercisePage({
+        search: searchQuery,
+        limit: 25,
+        offset: pageParam,
+      }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => lastPage.nextOffset,
+    staleTime: 30 * 1000,
+  });
+
+  const filteredExercises = (pagedExercises?.pages ?? []).flatMap((page) => page.exercises);
 
   const renderRoutine = ({ item }: { item: WorkoutRoutine }) => (
     <Swipeable
@@ -293,7 +315,17 @@ export default function WorkoutsScreen() {
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalContent}>
+          <KeyboardAvoidingView
+            style={styles.modalKeyboardContainer}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
+          >
+            <ScrollView
+              style={styles.modalContent}
+              contentContainerStyle={styles.modalContentInner}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+            >
             <TextInput
               style={styles.input}
               placeholder="Routine name"
@@ -333,11 +365,19 @@ export default function WorkoutsScreen() {
                     styles.exerciseItem,
                     isSelected && styles.exerciseItemSelected,
                   ]}
-                  onPress={() => toggleExercise(ex.id, ex.name)}
+                  onPress={() => toggleExercise(ex.id, ex.name, ex.gifUrl)}
                   activeOpacity={0.7}
                 >
                   <View>
-                    <Text style={styles.exerciseItemName}>{ex.name}</Text>
+                    <View style={styles.exerciseItemNameRow}>
+                      <Text style={styles.exerciseItemName}>{ex.name}</Text>
+                      <ExerciseInfoButton
+                        exerciseId={ex.id}
+                        exerciseName={ex.name}
+                        gifUrl={ex.gifUrl}
+                        description={ex.instructions}
+                      />
+                    </View>
                     <Text style={styles.exerciseItemMeta}>
                       {ex.muscleGroups.join(', ')} · {ex.equipment}
                     </Text>
@@ -350,7 +390,37 @@ export default function WorkoutsScreen() {
                 </TouchableOpacity>
               );
             })}
-          </ScrollView>
+
+            {isExerciseListLoading && (
+              <View style={styles.exerciseLoadingState}>
+                <ActivityIndicator color={Colors.primary} />
+                <Text style={styles.exerciseLoadingText}>Loading exercises...</Text>
+              </View>
+            )}
+
+            {!isExerciseListLoading && filteredExercises.length === 0 && (
+              <View style={styles.exerciseLoadingState}>
+                <Text style={styles.exerciseLoadingText}>
+                  {isExerciseListError ? 'Unable to load exercises' : 'No exercises found'}
+                </Text>
+              </View>
+            )}
+
+            {hasMoreExercises && !isExerciseListLoading && (
+              <TouchableOpacity
+                style={styles.loadMoreBtn}
+                onPress={() => fetchMoreExercises()}
+                activeOpacity={0.7}
+              >
+                {isExerciseListFetchingNextPage ? (
+                  <ActivityIndicator color={Colors.primary} />
+                ) : (
+                  <Text style={styles.loadMoreText}>Load More Exercises</Text>
+                )}
+              </TouchableOpacity>
+            )}
+            </ScrollView>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
     </SafeAreaView>
@@ -510,6 +580,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
+  modalKeyboardContainer: {
+    flex: 1,
+  },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -530,7 +603,11 @@ const styles = StyleSheet.create({
     color: Colors.primary,
   },
   modalContent: {
+    flex: 1,
+  },
+  modalContentInner: {
     padding: 16,
+    paddingBottom: 120,
   },
   input: {
     backgroundColor: Colors.inputBackground,
@@ -580,6 +657,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.text,
   },
+  exerciseItemNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   exerciseItemMeta: {
     fontSize: 12,
     color: Colors.textSecondary,
@@ -597,5 +679,31 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '700',
+  },
+  exerciseLoadingState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 16,
+  },
+  exerciseLoadingText: {
+    color: Colors.textSecondary,
+    fontSize: 13,
+  },
+  loadMoreBtn: {
+    marginTop: 6,
+    marginBottom: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.primary + '40',
+    backgroundColor: Colors.primary + '15',
+  },
+  loadMoreText: {
+    color: Colors.primary,
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

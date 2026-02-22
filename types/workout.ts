@@ -6,6 +6,7 @@ export interface Exercise {
   category: ExerciseCategory;
   muscleGroups: MuscleGroup[];
   equipment: Equipment;
+  gifUrl?: string;
   instructions?: string;
   isCustom?: boolean;
 }
@@ -79,6 +80,7 @@ export interface WorkoutExercise {
   id: string;
   exerciseId: string;
   exerciseName: string;
+  gifUrl?: string;
   sets: WorkoutSet[];
   notes?: string;
   order: number;
@@ -102,6 +104,7 @@ export interface WorkoutRoutine {
 export interface WorkoutRoutineExercise {
   exerciseId: string;
   exerciseName: string;
+  gifUrl?: string;
   targetSets: number;
   targetReps: number;
   targetWeight?: number;
