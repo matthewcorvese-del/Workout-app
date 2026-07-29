@@ -78,7 +78,7 @@ export default function SettingsScreen() {
                 }
                 const parsed = parseInt(v, 10);
                 if (Number.isNaN(parsed)) return;
-                updateProfile({ age: parsed });
+                updateProfile({ age: Math.max(0, parsed) });
               }}
               keyboardType="numeric"
               placeholder="30"
@@ -261,10 +261,21 @@ export default function SettingsScreen() {
             <Text style={styles.rowLabel}>Default Rest Timer (sec)</Text>
             <TextInput
               style={styles.rowInput}
-              value={String(settings.defaultRestTimer)}
-              onChangeText={(v) =>
-                updateSettings({ defaultRestTimer: parseInt(v) || 60 })
+              value={
+                settings.defaultRestTimer > 0
+                  ? String(settings.defaultRestTimer)
+                  : ''
               }
+              onChangeText={(v) => {
+                if (v.trim() === '') {
+                  updateSettings({ defaultRestTimer: 0 });
+                  return;
+                }
+                const parsed = parseInt(v, 10);
+                if (!Number.isNaN(parsed)) {
+                  updateSettings({ defaultRestTimer: Math.max(0, parsed) });
+                }
+              }}
               keyboardType="numeric"
               placeholder="90"
               placeholderTextColor={Colors.textMuted}

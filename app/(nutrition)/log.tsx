@@ -16,6 +16,7 @@ import { Swipeable } from 'react-native-gesture-handler';
 import { useNutrition } from '@/contexts/NutritionContext';
 import NutritionColors from '@/constants/nutritionColors';
 import { FoodSearchResult, MealType, FoodItem } from '@/types/nutrition';
+import { getLocalDateKey } from '@/lib/localDate';
 
 const mealOptions: { type: MealType; label: string; color: string }[] = [
   { type: 'breakfast', label: 'Breakfast', color: NutritionColors.breakfastColor },
@@ -56,8 +57,12 @@ export default function LogScreen() {
 
   const handleLogFood = () => {
     if (!selectedFood) return;
-    const servCount = parseFloat(servings) || 1;
-    const today = new Date().toISOString().split('T')[0];
+    const parsedServings = parseFloat(servings);
+    if (!Number.isFinite(parsedServings) || parsedServings <= 0) {
+      Alert.alert('Invalid Servings', 'Enter a serving amount greater than zero.');
+      return;
+    }
+    const today = getLocalDateKey();
 
     const foodItem: FoodItem = {
       id: selectedFood.id,
@@ -76,7 +81,7 @@ export default function LogScreen() {
     addFoodLog({
       foodItem,
       mealType: selectedMeal,
-      servings: servCount,
+      servings: parsedServings,
       date: today,
     });
 

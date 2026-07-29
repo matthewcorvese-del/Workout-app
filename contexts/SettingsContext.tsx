@@ -62,12 +62,22 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       .then((raw) => {
         if (raw) {
           try {
-            const saved = JSON.parse(raw);
-            setSettings({ ...defaultSettings, ...saved });
+            const saved = JSON.parse(raw) as Partial<Settings>;
+            setSettings({
+              ...defaultSettings,
+              ...saved,
+              profile: {
+                ...defaultProfile,
+                ...(saved.profile ?? {}),
+              },
+            });
           } catch {
             // corrupt data, use defaults
           }
         }
+      })
+      .catch((error) => {
+        console.warn('Failed to load settings:', error);
       })
       .finally(() => setIsLoaded(true));
   }, []);

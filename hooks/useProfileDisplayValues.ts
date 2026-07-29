@@ -28,11 +28,15 @@ export function useProfileDisplayValues({
         : `${profile.weightKg} kg`
       : 'Not set';
 
-    const displayHeight = profile.heightCm
-      ? heightUnit === 'imperial'
-        ? `${(profile.heightCm * CM_TO_IN).toFixed(1)} in`
-        : `${profile.heightCm} cm`
-      : 'Not set';
+    let displayHeight = 'Not set';
+    if (profile.heightCm > 0) {
+      if (heightUnit === 'imperial') {
+        const totalInches = Math.round(profile.heightCm * CM_TO_IN);
+        displayHeight = `${Math.floor(totalInches / 12)} ft ${totalInches % 12} in`;
+      } else {
+        displayHeight = `${profile.heightCm} cm`;
+      }
+    }
 
     return {
       displayWeight,

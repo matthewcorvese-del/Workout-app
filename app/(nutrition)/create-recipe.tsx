@@ -127,10 +127,15 @@ export default function CreateRecipeScreen() {
       );
       return;
     }
+    const parsedServings = parseFloat(servings);
+    if (!Number.isFinite(parsedServings) || parsedServings <= 0) {
+      Alert.alert('Invalid Servings', 'Enter a serving amount greater than zero.');
+      return;
+    }
 
     createRecipe({
       name: name.trim(),
-      servings: parseFloat(servings) || 1,
+      servings: parsedServings,
       ingredients,
     });
 

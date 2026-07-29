@@ -9,6 +9,7 @@ import {
   WorkoutStats,
   ExerciseProgress,
 } from '@/types/workout';
+import { getLocalDateKey, parseLocalDateKey } from '@/lib/localDate';
 
 const ROUTINES_KEY = 'workout_routines';
 const SESSIONS_KEY = 'workout_sessions';
@@ -65,10 +66,22 @@ function generateId(): string {
 function calculateVolume(exercises: WorkoutExercise[]): number {
   return exercises.reduce((total, ex) => {
     return total + ex.sets.reduce((setTotal, set) => {
-      if (set.isWarmup) return setTotal;
+      if (!set.completedAt || set.isWarmup) return setTotal;
       return setTotal + set.weight * set.reps;
     }, 0);
   }, 0);
+}
+
+function estimateOneRM(weight: number, reps: number): number {
+  if (weight <= 0 || reps <= 0) return 0;
+  if (reps === 1) return weight;
+  return Math.round(weight * (1 + reps / 30) * 10) / 10;
+}
+
+function getCompletedWorkingSets(exercise: WorkoutExercise): WorkoutSet[] {
+  return exercise.sets.filter(
+    (set) => Boolean(set.completedAt) && !set.isWarmup && set.reps > 0
+  );
 }
 
 function getLatestCompletedSetsForExercise(
@@ -143,37 +156,43 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       AsyncStorage.getItem(SESSIONS_KEY),
       AsyncStorage.getItem(ACTIVE_SESSION_KEY),
       AsyncStorage.getItem(PRS_KEY),
-    ]).then(([routinesRaw, sessionsRaw, activeRaw, prsRaw]) => {
-      if (routinesRaw) {
-        try { setRoutines(JSON.parse(routinesRaw)); } catch {}
-      }
-      if (sessionsRaw) {
-        try { setSessions(JSON.parse(sessionsRaw)); } catch {}
-      }
-      if (prsRaw) {
-        try {
-          const parsed = JSON.parse(prsRaw) as PersonalRecord[];
-          const filtered = parsed.filter((record) =>
-            ALLOWED_PR_TYPES.has(record.type)
-          );
-          setPersonalRecords(filtered);
-          if (filtered.length !== parsed.length) {
-            AsyncStorage.setItem(PRS_KEY, JSON.stringify(filtered));
-          }
-        } catch {}
-      }
-      // Check for recoverable (crashed) session
-      if (activeRaw) {
-        try {
-          const session = JSON.parse(activeRaw) as WorkoutSession;
-          if (session.isActive) {
-            recoverableSession.current = session;
-            setHasRecoverableSession(true);
-          }
-        } catch {}
-      }
-      setIsLoaded(true);
-    });
+    ])
+      .then(([routinesRaw, sessionsRaw, activeRaw, prsRaw]) => {
+        if (routinesRaw) {
+          try { setRoutines(JSON.parse(routinesRaw)); } catch {}
+        }
+        if (sessionsRaw) {
+          try { setSessions(JSON.parse(sessionsRaw)); } catch {}
+        }
+        if (prsRaw) {
+          try {
+            const parsed = JSON.parse(prsRaw) as PersonalRecord[];
+            const filtered = parsed.filter((record) =>
+              ALLOWED_PR_TYPES.has(record.type)
+            );
+            setPersonalRecords(filtered);
+            if (filtered.length !== parsed.length) {
+              void AsyncStorage.setItem(PRS_KEY, JSON.stringify(filtered));
+            }
+          } catch {}
+        }
+        // Check for recoverable (crashed) session
+        if (activeRaw) {
+          try {
+            const session = JSON.parse(activeRaw) as WorkoutSession;
+            if (session.isActive) {
+              recoverableSession.current = session;
+              setHasRecoverableSession(true);
+            }
+          } catch {}
+        }
+      })
+      .catch((error) => {
+        console.warn('Failed to load workout data:', error);
+      })
+      .finally(() => {
+        setIsLoaded(true);
+      });
   }, []);
 
   // ─── Persistence ───
@@ -246,6 +265,10 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
 
   const startWorkout = useCallback(
     (routineId?: string): WorkoutSession => {
+      if (activeSession) {
+        return activeSession;
+      }
+
       const routine = routineId ? routines.find((r) => r.id === routineId) : undefined;
       const session: WorkoutSession = {
         id: generateId(),
@@ -270,7 +293,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       persistActiveSession(session);
       return session;
     },
-    [routines, sessions, persistActiveSession]
+    [activeSession, routines, sessions, persistActiveSession]
   );
 
   const updateActiveSession = useCallback(
@@ -424,7 +447,9 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     (workoutExerciseId: string) => {
       updateActiveSession((session) => ({
         ...session,
-        exercises: session.exercises.filter((e) => e.id !== workoutExerciseId),
+        exercises: session.exercises
+          .filter((e) => e.id !== workoutExerciseId)
+          .map((exercise, index) => ({ ...exercise, order: index })),
       }));
     },
     [updateActiveSession]
@@ -516,18 +541,16 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     const completedSessions = sessions.filter((s) => s.completedAt);
 
     const totalDuration = completedSessions.reduce((sum, s) => sum + (s.duration || 0), 0);
-    const totalVolume = completedSessions.reduce((sum, s) => sum + s.totalVolume, 0);
-    const totalSets = completedSessions.reduce(
-      (sum, s) => sum + s.exercises.reduce((eSum, e) => eSum + e.sets.length, 0),
+    const totalVolume = completedSessions.reduce(
+      (sum, session) => sum + calculateVolume(session.exercises),
       0
     );
-    const totalReps = completedSessions.reduce(
-      (sum, s) =>
-        sum +
-        s.exercises.reduce(
-          (eSum, e) => eSum + e.sets.reduce((sSum, set) => sSum + set.reps, 0),
-          0
-        ),
+    const completedWorkingSets = completedSessions.flatMap((session) =>
+      session.exercises.flatMap(getCompletedWorkingSets)
+    );
+    const totalSets = completedWorkingSets.length;
+    const totalReps = completedWorkingSets.reduce(
+      (sum, set) => sum + set.reps,
       0
     );
 
@@ -541,27 +564,45 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     // Calculate streak
     let currentStreak = 0;
     let longestStreak = 0;
-    const daySet = new Set(
+    const daySet = new Set<string>(
       completedSessions
-        .map((s) => s.completedAt?.split('T')[0])
-        .filter(Boolean)
+        .map((session) => {
+          if (!session.completedAt) return null;
+          const completedAt = new Date(session.completedAt);
+          return Number.isNaN(completedAt.getTime())
+            ? null
+            : getLocalDateKey(completedAt);
+        })
+        .filter((value): value is string => value !== null)
     );
-    const sortedDays = Array.from(daySet).sort().reverse();
+    const sortedDays = Array.from(daySet).sort();
     let streak = 0;
-    let checkDate = new Date();
-    checkDate.setHours(0, 0, 0, 0);
-    for (let i = 0; i < 365; i++) {
-      const dateStr = checkDate.toISOString().split('T')[0];
-      if (daySet.has(dateStr)) {
+
+    sortedDays.forEach((dateKey, index) => {
+      const date = parseLocalDateKey(dateKey);
+      const previousDate =
+        index > 0 ? parseLocalDateKey(sortedDays[index - 1]) : null;
+      if (
+        date &&
+        previousDate &&
+        Math.round((date.getTime() - previousDate.getTime()) / 86400000) === 1
+      ) {
         streak++;
-        longestStreak = Math.max(longestStreak, streak);
-      } else if (i > 0) {
-        if (currentStreak === 0) currentStreak = streak;
-        streak = 0;
+      } else {
+        streak = 1;
       }
-      checkDate.setDate(checkDate.getDate() - 1);
+      longestStreak = Math.max(longestStreak, streak);
+    });
+
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const latestDateKey = sortedDays.at(-1);
+    if (
+      latestDateKey === getLocalDateKey() ||
+      latestDateKey === getLocalDateKey(yesterday)
+    ) {
+      currentStreak = streak;
     }
-    if (currentStreak === 0) currentStreak = streak;
 
     return {
       totalWorkouts: completedSessions.length,
@@ -598,7 +639,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
         exerciseName: firstEx.exerciseName,
         history: exerciseSessions.map((session) => {
           const ex = session.exercises.find((e) => e.exerciseId === exerciseId)!;
-          const workingSets = ex.sets.filter((s) => !s.isWarmup);
+          const workingSets = getCompletedWorkingSets(ex);
           const maxWeight = workingSets.length > 0
             ? Math.max(...workingSets.map((s) => s.weight))
             : 0;
@@ -612,7 +653,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
             : 0;
 
           return {
-            date: session.completedAt!.split('T')[0],
+            date: getLocalDateKey(new Date(session.completedAt!)),
             maxWeight,
             totalVolume,
             totalSets: workingSets.length,

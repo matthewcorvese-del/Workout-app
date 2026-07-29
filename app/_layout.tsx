@@ -7,8 +7,6 @@ import { AppModeProvider } from '@/contexts/AppModeContext';
 import { SettingsProvider } from '@/contexts/SettingsContext';
 import { WorkoutProvider } from '@/contexts/WorkoutContext';
 import { NutritionProvider } from '@/contexts/NutritionContext';
-import { OuraProvider } from '@/contexts/OuraContext';
-import { trpc, trpcClient } from '@/lib/trpc';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -22,38 +20,34 @@ const queryClient = new QueryClient({
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <trpc.Provider client={trpcClient} queryClient={queryClient}>
-        <QueryClientProvider client={queryClient}>
-          <SettingsProvider>
-            <AppModeProvider>
-              <OuraProvider>
-                <WorkoutProvider>
-                  <NutritionProvider>
-                    <StatusBar style="light" />
-                    <Stack
-                      screenOptions={{
-                        headerShown: false,
-                        contentStyle: { backgroundColor: '#0A1628' },
-                        animation: 'fade',
-                      }}
-                    >
-                      <Stack.Screen name="(tabs)" />
-                      <Stack.Screen name="(nutrition)" />
-                      <Stack.Screen
-                        name="active-workout"
-                        options={{
-                          presentation: 'fullScreenModal',
-                          animation: 'slide_from_bottom',
-                        }}
-                      />
-                    </Stack>
-                  </NutritionProvider>
-                </WorkoutProvider>
-              </OuraProvider>
-            </AppModeProvider>
-          </SettingsProvider>
-        </QueryClientProvider>
-      </trpc.Provider>
+      <QueryClientProvider client={queryClient}>
+        <SettingsProvider>
+          <AppModeProvider>
+            <WorkoutProvider>
+              <NutritionProvider>
+                <StatusBar style="light" />
+                <Stack
+                  screenOptions={{
+                    headerShown: false,
+                    contentStyle: { backgroundColor: '#0A1628' },
+                    animation: 'fade',
+                  }}
+                >
+                  <Stack.Screen name="(tabs)" />
+                  <Stack.Screen name="(nutrition)" />
+                  <Stack.Screen
+                    name="active-workout"
+                    options={{
+                      presentation: 'fullScreenModal',
+                      animation: 'slide_from_bottom',
+                    }}
+                  />
+                </Stack>
+              </NutritionProvider>
+            </WorkoutProvider>
+          </AppModeProvider>
+        </SettingsProvider>
+      </QueryClientProvider>
     </GestureHandlerRootView>
   );
 }

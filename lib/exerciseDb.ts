@@ -119,22 +119,27 @@ function inferCategory(
 }
 
 function mapExerciseDbExercise(item: ExerciseDbExercise): Exercise {
-	const normalizedEquipment = item.equipments
+	const equipments = Array.isArray(item.equipments) ? item.equipments : [];
+	const targetMuscles = Array.isArray(item.targetMuscles) ? item.targetMuscles : [];
+	const secondaryMuscles = Array.isArray(item.secondaryMuscles) ? item.secondaryMuscles : [];
+	const bodyParts = Array.isArray(item.bodyParts) ? item.bodyParts : [];
+	const normalizedEquipment = equipments
 		.map(normalizeEquipment)
-		.find((value) => value !== 'Other') ?? normalizeEquipment(item.equipments[0] || 'Other');
+		.find((value) => value !== 'Other') ?? normalizeEquipment(equipments[0] || 'Other');
 
-	const muscleCandidates = [...item.targetMuscles, ...item.secondaryMuscles]
+	const muscleCandidates = [...targetMuscles, ...secondaryMuscles]
 		.map(normalizeMuscleName)
 		.filter((value): value is MuscleGroup => value !== null);
 
 	const uniqueMuscles = Array.from(new Set(muscleCandidates));
-	const muscleGroups = uniqueMuscles.length > 0 ? uniqueMuscles : ['Full Body'];
+	const muscleGroups: MuscleGroup[] =
+		uniqueMuscles.length > 0 ? uniqueMuscles : ['Full Body'];
 
 	return {
 		id: item.exerciseId,
 		name: item.name,
 		equipment: normalizedEquipment,
-		category: inferCategory(normalizedEquipment, item.bodyParts, muscleGroups),
+		category: inferCategory(normalizedEquipment, bodyParts, muscleGroups),
 		muscleGroups,
 		gifUrl: item.gifUrl,
 		instructions: item.instructions?.join('\n'),
@@ -185,7 +190,11 @@ export async function fetchExerciseDbExercisePage(params?: {
 			throw new Error(`ExerciseDB request failed (${response.status})`);
 		}
 
-		return (await response.json()) as ExerciseDbListResponse;
+		const payload = (await response.json()) as ExerciseDbListResponse;
+		if (!payload.success || !Array.isArray(payload.data)) {
+			throw new Error('ExerciseDB returned an invalid exercise list');
+		}
+		return payload;
 	};
 
 	let payload: ExerciseDbListResponse;
@@ -217,7 +226,7 @@ export async function fetchExerciseDbExercisePage(params?: {
 	}
 
 	let nextOffset: number | null = null;
-	if (payload.metadata?.nextPage || exercises.length === limit) {
+	if (payload.metadata?.nextPage || payload.data.length === limit) {
 		nextOffset = offset + limit;
 	}
 
@@ -234,15 +243,23 @@ export async function fetchExerciseDbMuscles(): Promise<string[]> {
 	}
 
 	const payload = (await response.json()) as ExerciseDbMuscleResponse;
+	if (!payload.success || !Array.isArray(payload.data)) {
+		throw new Error('ExerciseDB returned an invalid muscle list');
+	}
 	return payload.data.map((item) => titleCase(item.name));
 }
 
 export async function fetchExerciseDbExerciseById(exerciseId: string): Promise<Exercise> {
-	const response = await fetch(`${EXERCISE_DB_BASE_URL}/exercises/${exerciseId}`);
+	const response = await fetch(
+		`${EXERCISE_DB_BASE_URL}/exercises/${encodeURIComponent(exerciseId)}`
+	);
 	if (!response.ok) {
 		throw new Error(`ExerciseDB by-id request failed (${response.status})`);
 	}
 
 	const payload = (await response.json()) as ExerciseDbSingleResponse;
+	if (!payload.success || !payload.data) {
+		throw new Error('ExerciseDB returned an invalid exercise');
+	}
 	return mapExerciseDbExercise(payload.data);
 }

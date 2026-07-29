@@ -48,8 +48,6 @@ export interface DailySummary {
   };
   totals: MacroTotals;
   goals: MacroGoals;
-  caloriesBurned?: number;
-  netCalories?: number;
 }
 
 export interface MacroTotals {
@@ -119,5 +117,4 @@ export interface NutritionSettings {
   proteinGoal: number;
   carbsGoal: number;
   fatGoal: number;
-  useOuraCalories: boolean; // use Oura data for calorie burn estimates
 }

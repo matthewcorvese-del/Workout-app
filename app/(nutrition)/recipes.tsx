@@ -15,6 +15,7 @@ import { Swipeable } from 'react-native-gesture-handler';
 import { useNutrition } from '@/contexts/NutritionContext';
 import NutritionColors from '@/constants/nutritionColors';
 import { Recipe, MealType } from '@/types/nutrition';
+import { getLocalDateKey } from '@/lib/localDate';
 
 export default function RecipesScreen() {
   const { recipes, deleteRecipe, addFoodLog } = useNutrition();
@@ -28,19 +29,19 @@ export default function RecipesScreen() {
     : recipes;
 
   const handleQuickLog = (recipe: Recipe) => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateKey();
     addFoodLog({
       foodItem: {
         id: `recipe_${recipe.id}`,
         name: recipe.name,
-        servingSize: recipe.servings,
+        servingSize: 1,
         servingUnit: 'serving',
-        calories: recipe.totals.calories / recipe.servings,
-        protein: recipe.totals.protein / recipe.servings,
-        carbs: recipe.totals.carbs / recipe.servings,
-        fat: recipe.totals.fat / recipe.servings,
-        source: 'custom',
-        isCustom: true,
+        calories: recipe.perServing.calories,
+        protein: recipe.perServing.protein,
+        carbs: recipe.perServing.carbs,
+        fat: recipe.perServing.fat,
+        source: 'recipe',
+        isCustom: false,
       },
       mealType: 'lunch' as MealType,
       servings: 1,

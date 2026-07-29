@@ -1,6 +1,0 @@
-{
-  "version": 2,
-  "framework": null,
-  "installCommand": "npm install",
-  "buildCommand": "node build-vercel.mjs"
-}

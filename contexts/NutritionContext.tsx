@@ -12,6 +12,7 @@ import {
   FoodSearchResult,
   NutritionSettings,
 } from '@/types/nutrition';
+import { getLocalDateKey } from '@/lib/localDate';
 
 const FOOD_LOGS_KEY = 'food_logs';
 const RECIPES_KEY = 'recipes';
@@ -64,28 +65,57 @@ function generateId(): string {
 }
 
 function getToday(): string {
-  return new Date().toISOString().split('T')[0];
+  return getLocalDateKey();
 }
 
 function calculateMacros(food: FoodItem, servings: number): MacroTotals {
+  const safeServings =
+    Number.isFinite(servings) && servings > 0 ? servings : 1;
   return {
-    calories: Math.round(food.calories * servings),
-    protein: Math.round(food.protein * servings * 10) / 10,
-    carbs: Math.round(food.carbs * servings * 10) / 10,
-    fat: Math.round(food.fat * servings * 10) / 10,
+    calories: Math.round(food.calories * safeServings),
+    protein: Math.round(food.protein * safeServings * 10) / 10,
+    carbs: Math.round(food.carbs * safeServings * 10) / 10,
+    fat: Math.round(food.fat * safeServings * 10) / 10,
   };
 }
 
 function calculateRecipeTotals(ingredients: RecipeIngredient[]): MacroTotals {
   return ingredients.reduce(
-    (totals, ing) => ({
-      calories: totals.calories + ing.calories,
-      protein: totals.protein + ing.protein,
-      carbs: totals.carbs + ing.carbs,
-      fat: totals.fat + ing.fat,
-    }),
+    (totals, ing) => {
+      const servings =
+        Number.isFinite(ing.servings) && ing.servings > 0 ? ing.servings : 1;
+      return {
+        calories: totals.calories + ing.calories * servings,
+        protein: totals.protein + ing.protein * servings,
+        carbs: totals.carbs + ing.carbs * servings,
+        fat: totals.fat + ing.fat * servings,
+      };
+    },
     { calories: 0, protein: 0, carbs: 0, fat: 0 }
   );
+}
+
+function normalizeRecipe(recipe: Recipe): Recipe {
+  const servings =
+    Number.isFinite(recipe.servings) && recipe.servings > 0
+      ? recipe.servings
+      : 1;
+  const totals = calculateRecipeTotals(recipe.ingredients);
+  return {
+    ...recipe,
+    servings,
+    totals,
+    perServing: {
+      calories: Math.round(totals.calories / servings),
+      protein: Math.round((totals.protein / servings) * 10) / 10,
+      carbs: Math.round((totals.carbs / servings) * 10) / 10,
+      fat: Math.round((totals.fat / servings) * 10) / 10,
+    },
+  };
+}
+
+function sanitizeGoal(value: number, fallback: number): number {
+  return Number.isFinite(value) && value > 0 ? Math.round(value) : fallback;
 }
 
 const defaultNutritionSettings: NutritionSettings = {
@@ -93,8 +123,30 @@ const defaultNutritionSettings: NutritionSettings = {
   proteinGoal: 150,
   carbsGoal: 250,
   fatGoal: 65,
-  useOuraCalories: false,
 };
+
+function normalizeNutritionSettings(
+  value: Partial<NutritionSettings>
+): NutritionSettings {
+  return {
+    calorieGoal: sanitizeGoal(
+      value.calorieGoal ?? defaultNutritionSettings.calorieGoal,
+      defaultNutritionSettings.calorieGoal
+    ),
+    proteinGoal: sanitizeGoal(
+      value.proteinGoal ?? defaultNutritionSettings.proteinGoal,
+      defaultNutritionSettings.proteinGoal
+    ),
+    carbsGoal: sanitizeGoal(
+      value.carbsGoal ?? defaultNutritionSettings.carbsGoal,
+      defaultNutritionSettings.carbsGoal
+    ),
+    fatGoal: sanitizeGoal(
+      value.fatGoal ?? defaultNutritionSettings.fatGoal,
+      defaultNutritionSettings.fatGoal
+    ),
+  };
+}
 
 // ─── Provider ───
 
@@ -112,17 +164,41 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
       AsyncStorage.getItem(RECIPES_KEY),
       AsyncStorage.getItem(CUSTOM_FOODS_KEY),
       AsyncStorage.getItem(NUTRITION_SETTINGS_KEY),
-    ]).then(([logsRaw, recipesRaw, foodsRaw, settingsRaw]) => {
-      if (logsRaw) { try { setAllLogs(JSON.parse(logsRaw)); } catch {} }
-      if (recipesRaw) { try { setRecipes(JSON.parse(recipesRaw)); } catch {} }
-      if (foodsRaw) { try { setCustomFoods(JSON.parse(foodsRaw)); } catch {} }
-      if (settingsRaw) {
-        try {
-          setNutritionSettings({ ...defaultNutritionSettings, ...JSON.parse(settingsRaw) });
-        } catch {}
-      }
-      setIsLoaded(true);
-    });
+    ])
+      .then(([logsRaw, recipesRaw, foodsRaw, settingsRaw]) => {
+        if (logsRaw) { try { setAllLogs(JSON.parse(logsRaw)); } catch {} }
+        if (recipesRaw) {
+          try {
+            const normalizedRecipes = (JSON.parse(recipesRaw) as Recipe[]).map(
+              normalizeRecipe
+            );
+            setRecipes(normalizedRecipes);
+            void AsyncStorage.setItem(
+              RECIPES_KEY,
+              JSON.stringify(normalizedRecipes)
+            );
+          } catch {}
+        }
+        if (foodsRaw) { try { setCustomFoods(JSON.parse(foodsRaw)); } catch {} }
+        if (settingsRaw) {
+          try {
+            const normalizedSettings = normalizeNutritionSettings(
+              JSON.parse(settingsRaw)
+            );
+            setNutritionSettings(normalizedSettings);
+            void AsyncStorage.setItem(
+              NUTRITION_SETTINGS_KEY,
+              JSON.stringify(normalizedSettings)
+            );
+          } catch {}
+        }
+      })
+      .catch((error) => {
+        console.warn('Failed to load nutrition data:', error);
+      })
+      .finally(() => {
+        setIsLoaded(true);
+      });
   }, []);
 
   // Persistence helpers
@@ -157,6 +233,10 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
       const macros = calculateMacros(entry.foodItem, entry.servings);
       const newEntry: FoodLogEntry = {
         ...entry,
+        servings:
+          Number.isFinite(entry.servings) && entry.servings > 0
+            ? entry.servings
+            : 1,
         id: generateId(),
         loggedAt: new Date().toISOString(),
         ...macros,
@@ -177,6 +257,10 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
           if (l.id !== id) return l;
           const updated = { ...l, ...update };
           if (update.servings !== undefined || update.foodItem) {
+            updated.servings =
+              Number.isFinite(updated.servings) && updated.servings > 0
+                ? updated.servings
+                : 1;
             const macros = calculateMacros(
               updated.foodItem,
               updated.servings
@@ -249,7 +333,10 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
       input: Omit<Recipe, 'id' | 'createdAt' | 'updatedAt' | 'totals' | 'perServing'>
     ): Recipe => {
       const totals = calculateRecipeTotals(input.ingredients);
-      const servings = Math.max(input.servings, 1);
+      const servings =
+        Number.isFinite(input.servings) && input.servings > 0
+          ? input.servings
+          : 1;
       const perServing: MacroTotals = {
         calories: Math.round(totals.calories / servings),
         protein: Math.round((totals.protein / servings) * 10) / 10,
@@ -259,6 +346,7 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
 
       const recipe: Recipe = {
         ...input,
+        servings,
         id: generateId(),
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -282,10 +370,14 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
         const next = prev.map((r) => {
           if (r.id !== id) return r;
           const updated = { ...r, ...update, updatedAt: new Date().toISOString() };
-          // Recalculate totals if ingredients changed
-          if (update.ingredients) {
-            const totals = calculateRecipeTotals(update.ingredients);
-            const servings = Math.max(updated.servings, 1);
+          // Recalculate per-serving values if ingredients or servings changed.
+          if (update.ingredients || update.servings !== undefined) {
+            const totals = calculateRecipeTotals(updated.ingredients);
+            const servings =
+              Number.isFinite(updated.servings) && updated.servings > 0
+                ? updated.servings
+                : 1;
+            updated.servings = servings;
             updated.totals = totals;
             updated.perServing = {
               calories: Math.round(totals.calories / servings),
@@ -350,9 +442,11 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
   const searchFoods = useCallback(
     async (query: string): Promise<FoodSearchResult[]> => {
       const results: FoodSearchResult[] = [];
+      const normalizedQuery = query.trim();
+      if (!normalizedQuery) return results;
 
       // Search custom foods first
-      const lowerQuery = query.toLowerCase();
+      const lowerQuery = normalizedQuery.toLowerCase();
       customFoods
         .filter((f) => f.name.toLowerCase().includes(lowerQuery))
         .forEach((f) => {
@@ -389,7 +483,7 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
 
       // Search USDA FoodData Central
       try {
-        const usdaUrl = `https://api.nal.usda.gov/fdc/v1/foods/search?query=${encodeURIComponent(query)}&pageSize=10&api_key=DEMO_KEY`;
+        const usdaUrl = `https://api.nal.usda.gov/fdc/v1/foods/search?query=${encodeURIComponent(normalizedQuery)}&pageSize=10&api_key=DEMO_KEY`;
         const response = await fetch(usdaUrl);
         if (response.ok) {
           const data = await response.json();
@@ -430,7 +524,7 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
     async (barcode: string): Promise<FoodSearchResult | null> => {
       try {
         const response = await fetch(
-          `https://world.openfoodfacts.org/api/v0/product/${barcode}.json`
+          `https://world.openfoodfacts.org/api/v0/product/${encodeURIComponent(barcode.trim())}.json`
         );
         if (!response.ok) return null;
 
@@ -466,7 +560,26 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
   const updateNutritionSettings = useCallback(
     (update: Partial<NutritionSettings>) => {
       setNutritionSettings((prev) => {
-        const next = { ...prev, ...update };
+        const next = {
+          ...prev,
+          ...update,
+          calorieGoal: sanitizeGoal(
+            update.calorieGoal ?? prev.calorieGoal,
+            defaultNutritionSettings.calorieGoal
+          ),
+          proteinGoal: sanitizeGoal(
+            update.proteinGoal ?? prev.proteinGoal,
+            defaultNutritionSettings.proteinGoal
+          ),
+          carbsGoal: sanitizeGoal(
+            update.carbsGoal ?? prev.carbsGoal,
+            defaultNutritionSettings.carbsGoal
+          ),
+          fatGoal: sanitizeGoal(
+            update.fatGoal ?? prev.fatGoal,
+            defaultNutritionSettings.fatGoal
+          ),
+        };
         persistNutritionSettings(next);
         return next;
       });
