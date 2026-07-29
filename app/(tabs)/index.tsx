@@ -59,11 +59,14 @@ export default function WorkoutsScreen() {
     }
   }, [mode, router]);
 
-  if (mode === 'nutrition') {
-    return null;
-  }
-
   const handleStartQuickWorkout = () => {
+    if (activeSession) {
+      Alert.alert(
+        'Active Workout',
+        'You already have a workout in progress. Finish or cancel it first.',
+      );
+      return;
+    }
     startWorkout();
     router.push('/active-workout');
   };
@@ -189,9 +192,14 @@ export default function WorkoutsScreen() {
     initialPageParam: 0,
     getNextPageParam: (lastPage) => lastPage.nextOffset,
     staleTime: 30 * 1000,
+    enabled: mode === 'fitness' && showCreateModal,
   });
 
   const filteredExercises = (pagedExercises?.pages ?? []).flatMap((page) => page.exercises);
+
+  if (mode === 'nutrition') {
+    return null;
+  }
 
   const renderRoutine = ({ item }: { item: WorkoutRoutine }) => (
     <Swipeable

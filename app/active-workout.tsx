@@ -401,6 +401,7 @@ export default function ActiveWorkoutScreen() {
     initialPageParam: 0,
     getNextPageParam: (lastPage) => lastPage.nextOffset,
     staleTime: 30 * 1000,
+    enabled: showAddExercise,
   });
 
   const filteredExercises = (pagedExercises?.pages ?? []).flatMap((page) => page.exercises);

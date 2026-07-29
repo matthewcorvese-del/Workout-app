@@ -1,4 +1,7 @@
 node_modules
+.env
+.env.*
+!.env.example
 
 # macOS metadata
 .DS_Store
@@ -6,6 +9,7 @@ node_modules
 
 # Expo local state/cache
 .expo/
+.vercel/
 
 # Local webhook data persistence
 .data/

@@ -68,7 +68,7 @@ export function useProfileMeasurementInputs({
     }
 
     const parsed = parseFloat(raw);
-    if (Number.isNaN(parsed)) return;
+    if (!Number.isFinite(parsed) || parsed < 0) return;
 
     updateProfile({
       weightKg: weightUnit === 'lbs' ? parsed / KG_TO_LBS : parsed,
@@ -92,7 +92,9 @@ export function useProfileMeasurementInputs({
     const feet = parseInt(heightFtInput.trim(), 10);
     const inches = parseInt(heightInInput.trim(), 10);
     const safeFeet = Number.isNaN(feet) ? 0 : Math.max(0, feet);
-    const safeInches = Number.isNaN(inches) ? 0 : Math.max(0, inches);
+    const safeInches = Number.isNaN(inches)
+      ? 0
+      : Math.min(11, Math.max(0, inches));
     const totalInches = safeFeet * 12 + safeInches;
 
     updateProfile({

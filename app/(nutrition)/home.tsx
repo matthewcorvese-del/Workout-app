@@ -8,7 +8,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Beef, Wheat, Droplets } from 'lucide-react-native';
 import { useNutrition } from '@/contexts/NutritionContext';
-import { useOura } from '@/contexts/OuraContext';
 import { useAppMode } from '@/contexts/AppModeContext';
 import { useRouter } from 'expo-router';
 import NutritionColors from '@/constants/nutritionColors';
@@ -17,8 +16,7 @@ import { MealType } from '@/types/nutrition';
 export default function NutritionHomeScreen() {
   const { mode } = useAppMode();
   const router = useRouter();
-  const { todaySummary, nutritionSettings } = useNutrition();
-  const { estimatedCalories, actualCalories } = useOura();
+  const { todaySummary } = useNutrition();
 
   // Redirect to fitness if in fitness mode
   useEffect(() => {
@@ -32,8 +30,8 @@ export default function NutritionHomeScreen() {
   }
 
   const { totals, goals } = todaySummary;
-  const caloriesBurned = actualCalories || estimatedCalories;
-  const calorieProgressPct = Math.min(totals.calories / goals.calories, 1);
+  const calorieProgressPct =
+    goals.calories > 0 ? Math.min(totals.calories / goals.calories, 1) : 0;
 
   const mealSummary: { type: MealType; label: string; color: string; calories: number }[] = [
     {
@@ -102,14 +100,6 @@ export default function NutritionHomeScreen() {
                 {Math.round(totals.calories)}
               </Text>
             </View>
-            {nutritionSettings.useOuraCalories && (
-              <View style={styles.calorieRow}>
-                <Text style={styles.calorieDetailLabel}>Burned</Text>
-                <Text style={styles.calorieDetailValue}>
-                  {Math.round(caloriesBurned)}
-                </Text>
-              </View>
-            )}
             <View style={styles.calorieRow}>
               <Text style={styles.calorieDetailLabel}>Remaining</Text>
               <Text
